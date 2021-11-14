@@ -1,5 +1,7 @@
 use std::error::Error;
 
+use log::{debug, error, info, warn};
+use log4rs;
 use mio::net::{TcpListener, TcpStream};
 use mio::{Events, Interest, Poll, Token};
 
@@ -8,6 +10,13 @@ const SERVER: Token = Token(0);
 const CLIENT: Token = Token(1);
 
 fn main() -> Result<(), Box<dyn Error>> {
+    log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
+
+    error!("error log");
+    warn!("warn log");
+    info!("info log");
+    debug!("debug log");
+
     // Create a poll instance.
     let mut poll = Poll::new()?;
     // Create storage for events.

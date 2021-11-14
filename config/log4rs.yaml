@@ -1,0 +1,25 @@
+# Scan this file for changes every 30 seconds
+refresh_rate: 10 seconds
+
+appenders:
+  stdout:
+    kind: console
+
+  operation:
+    kind: file
+    path: "log/operation.log"
+    encoder:
+      pattern: "{date},{level},{m},{file},{module},{line},{thread}{n}"
+
+root:
+  level: DEBUG
+  appenders:
+    - stdout
+    - operation
+
+loggers:
+  app::operation:
+    level: info
+    appenders:
+      - operation
+    additive: false

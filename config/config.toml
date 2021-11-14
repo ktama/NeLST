@@ -1,0 +1,4 @@
+[load_test]
+type = "client"
+protocol = "tcp"
+target = "127.0.0.1:13265"

@@ -12,7 +12,7 @@ appenders:
       pattern: "{date},{level},{m},{file},{module},{line},{thread}{n}"
 
 root:
-  level: DEBUG
+  level: info
   appenders:
     - stdout
     - operation

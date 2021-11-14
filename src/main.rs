@@ -1,5 +1,7 @@
 use std::error::Error;
 
+mod file_config;
+use file_config::CONFIG;
 use log::{debug, error, info, warn};
 use log4rs;
 use mio::net::{TcpListener, TcpStream};
@@ -17,13 +19,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     info!("info log");
     debug!("debug log");
 
+    let target = CONFIG["load_test"]["target"].as_str().unwrap();
+    info!("[config] target: {}", target);
+
     // Create a poll instance.
     let mut poll = Poll::new()?;
     // Create storage for events.
     let mut events = Events::with_capacity(128);
 
     // Setup the server socket.
-    let addr = "127.0.0.1:13265".parse()?;
+    let addr = target.parse()?;
     let mut server = TcpListener::bind(addr)?;
     // Start listening for incoming connections.
     poll.registry()

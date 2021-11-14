@@ -20,16 +20,16 @@ fn load_config() -> Value {
     let cur_path = Path::new(&cur_path_str);
     let cur_dir = cur_path.parent().unwrap().display();
 
-    let mut conf_toml_str = String::new();
+    let mut conf_toml_str;
     conf_toml_str = get_text_file(Path::new("config/config.toml"), "toml");
     // 文字列内に「{CUR}」が存在すれば、当プログラムが存在するディレクトリとみなして、カレントディレクトリに置換
     conf_toml_str = conf_toml_str.replace("{CUR}", &format!("{}", &cur_dir));
 
     // 設定をtoml形式に変換して返す
-    conf_toml_str.parse::<Value>().expect(&format!(
+    return conf_toml_str.parse::<Value>().expect(&format!(
         "couldn't parse config file to toml format.{}",
         &conf_toml_str
-    ))
+    ));
 }
 
 fn get_text_file(path: &Path, extension: &'static str) -> String {

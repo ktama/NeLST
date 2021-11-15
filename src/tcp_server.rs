@@ -6,27 +6,33 @@ use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::str::from_utf8;
 
-// TODO: impl 内に定義
-const DATA: &[u8] = b"Hello world!\n";
-
 pub struct TcpServer {
     bind_addr: std::net::SocketAddr,
+    data: Vec<u8>,
 }
 
 impl TcpServer {
     const SERVER: Token = Token(0);
-    // const DATA: &[u8] = b"Hello world!\n";
 
-    pub fn new() -> TcpServer {
-        // TODO: CONFIGの読み込み
-        // let target = CONFIG["load_test"]["target"].as_str().unwrap();
-        let target = "127.0.0.1:13625";
-        info!("[config] target: {}", target);
-        let addr = target.parse().unwrap();
-        TcpServer { bind_addr: addr }
+    pub fn new(bind_addr_config: std::net::SocketAddr, packet_size_config: usize) -> TcpServer {
+        info!(
+            "[config] bind_addr: {}, packet_size: {}",
+            bind_addr_config, packet_size_config
+        );
+        TcpServer {
+            bind_addr: bind_addr_config,
+            data: vec![0x1; packet_size_config],
+        }
     }
 
     pub fn test_traffic_load(&self) -> io::Result<()> {
+        let tmp = &self.data;
+        if let Ok(str_buf) = from_utf8(tmp) {
+            info!("Received data: {}", str_buf.trim_end());
+        } else {
+            info!("Received (none UTF-8) data: {:?}", tmp);
+        }
+        info!("data: {:?}", tmp);
         // Create a poll instance.
         let mut poll = Poll::new()?;
         // Create storage for events.
@@ -120,11 +126,11 @@ impl TcpServer {
     ) -> io::Result<bool> {
         if event.is_writable() {
             // We can (maybe) write to the connection.
-            match connection.write(DATA) {
+            match connection.write(&self.data) {
                 // We want to write the entire `DATA` buffer in a single go. If we
                 // write less we'll return a short write error (same as
                 // `io::Write::write_all` does).
-                Ok(n) if n < DATA.len() => return Err(io::ErrorKind::WriteZero.into()),
+                Ok(n) if n < self.data.len() => return Err(io::ErrorKind::WriteZero.into()),
                 Ok(_) => {
                     // After we've written something we'll reregister the connection
                     // to only respond to readable events.

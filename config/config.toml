@@ -1,4 +1,5 @@
 [load_test]
 type = "client"
 protocol = "tcp"
-target = "127.0.0.1:13265"
+target = "127.0.0.1:13264"
+packet_size = 10

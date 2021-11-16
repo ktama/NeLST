@@ -16,7 +16,7 @@ impl TcpServer {
 
     pub fn new(bind_addr_config: std::net::SocketAddr, packet_size_config: usize) -> TcpServer {
         info!(
-            "[config] bind_addr: {}, packet_size: {}",
+            "config bind_addr: {}, packet_size: {}",
             bind_addr_config, packet_size_config
         );
         TcpServer {
@@ -28,11 +28,10 @@ impl TcpServer {
     pub fn test_traffic_load(&self) -> io::Result<()> {
         let tmp = &self.data;
         if let Ok(str_buf) = from_utf8(tmp) {
-            info!("Received data: {}", str_buf.trim_end());
+            info!("Send data: {}", str_buf.trim_end());
         } else {
-            info!("Received (none UTF-8) data: {:?}", tmp);
+            info!("Send (none UTF-8) data: {:?}", tmp);
         }
-        info!("data: {:?}", tmp);
         // Create a poll instance.
         let mut poll = Poll::new()?;
         // Create storage for events.
@@ -130,7 +129,15 @@ impl TcpServer {
                 // We want to write the entire `DATA` buffer in a single go. If we
                 // write less we'll return a short write error (same as
                 // `io::Write::write_all` does).
-                Ok(n) if n < self.data.len() => return Err(io::ErrorKind::WriteZero.into()),
+                Ok(n) if n < self.data.len() => {
+                    let tmp = &self.data;
+                    if let Ok(str_buf) = from_utf8(tmp) {
+                        info!("Sent data: {}", str_buf.trim_end());
+                    } else {
+                        info!("Sent (none UTF-8) data: {:?}", tmp);
+                    }
+                    return Err(io::ErrorKind::WriteZero.into());
+                }
                 Ok(_) => {
                     // After we've written something we'll reregister the connection
                     // to only respond to readable events.

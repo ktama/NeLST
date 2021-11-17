@@ -32,50 +32,44 @@ impl TcpServer {
         } else {
             info!("Send (none UTF-8) data: {:?}", tmp);
         }
-        // Create a poll instance.
+        // pollのインスタンスを作成
         let mut poll = Poll::new()?;
-        // Create storage for events.
+        // eventのストレージ領域
         let mut events = Events::with_capacity(128);
 
-        // Setup the server socket.
+        // サーバーソケットを設定
         let mut server = TcpListener::bind(self.bind_addr)?;
-        // Start listening for incoming connections.
+        // 着信接続のリスニングを開始
         poll.registry()
             .register(&mut server, Self::SERVER, Interest::READABLE)?;
 
-        // Map of `Token` -> `TcpStream`.
+        // `Token` -> `TcpStream` のマップ
         let mut connections = HashMap::new();
-        // Unique token for each incoming connection.
+        //  着信接続のユニークトークン
         let mut unique_token = Token(Self::SERVER.0 + 1);
 
         // Start an event loop.
         loop {
-            // Poll Mio for events, blocking until we get an event.
+            // イベントが発生するまで待機 Poll Mio
             poll.poll(&mut events, None)?;
 
-            // Process each event.
+            // 各イベントの処理
             for event in events.iter() {
-                // We can use the token we previously provided to `register` to
-                // determine for which socket the event is.
+                // "register" に登録したトークンをを利用して、どのソケットのイベントか判断できる
                 match event.token() {
                     Self::SERVER => loop {
-                        // If this is an event for the server, it means a connection
-                        // is ready to be accepted.
-                        //
-                        // Accept the connection and drop it immediately. This will
-                        // close the socket and notify the client of the EOF.
+                        // サーバーのイベントの場合、接続準備ができていることを意味する
+                        // 接続を許可し、すぐにドロップする
+                        // これにより、ソケットがクローズされ、クライアントへEOFを通知
                         let (mut connection, address) = match server.accept() {
                             Ok((connection, address)) => (connection, address),
                             Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                                // If we get a `WouldBlock` error we know our
-                                // listener has no more incoming connections queued,
-                                // so we can return to polling and wait for some
-                                // more.
+                                // `WouldBlock` エラーが発生した場合、リスナーは着信接続がキューにないことがわかるので、
+                                // ポーリングに戻り次の接続を待つ。
                                 break;
                             }
                             Err(e) => {
-                                // If it was any other kind of error, something went
-                                // wrong and we terminate with an error.
+                                // 他の種類のエラーの場合は、何かの誤りがあるため終了
                                 return Err(e);
                             }
                         };
@@ -92,11 +86,11 @@ impl TcpServer {
                         connections.insert(token, connection);
                     },
                     token => {
-                        // Maybe received an event for a TCP connection.
+                        // TCP接続を受信した可能性がある
                         let done = if let Some(connection) = connections.get_mut(&token) {
                             self.handle_connection_event(poll.registry(), connection, event)?
                         } else {
-                            // Sporadic events happen, we can safely ignore them.
+                            // まばらなイベントが発生した場合は無視できる
                             false
                         };
                         if done {
@@ -116,7 +110,7 @@ impl TcpServer {
         Token(next)
     }
 
-    /// Returns `true` if the connection is done.
+    /// 接続が完了した場合、`true`を返す
     fn handle_connection_event(
         &self,
         registry: &Registry,
@@ -124,11 +118,11 @@ impl TcpServer {
         event: &Event,
     ) -> io::Result<bool> {
         if event.is_writable() {
-            // We can (maybe) write to the connection.
+            // 該当の接続へ書き込みできる可能性がある
             match connection.write(&self.data) {
-                // We want to write the entire `DATA` buffer in a single go. If we
-                // write less we'll return a short write error (same as
-                // `io::Write::write_all` does).
+                // バッファへ`DATA`を一度に書き込む
+                // `DATA`より書き込めた長さが短い場合、書き込みエラーを返す
+                // `io::Write::write_all` と同様の動き
                 Ok(n) if n < self.data.len() => {
                     let tmp = &self.data;
                     if let Ok(str_buf) = from_utf8(tmp) {
@@ -139,18 +133,16 @@ impl TcpServer {
                     return Err(io::ErrorKind::WriteZero.into());
                 }
                 Ok(_) => {
-                    // After we've written something we'll reregister the connection
-                    // to only respond to readable events.
+                    // 書き込み後は、受信イベントのみに反応するように接続を再登録
                     registry.reregister(connection, event.token(), Interest::READABLE)?
                 }
-                // Would block "errors" are the OS's way of saying that the
-                // connection is not actually ready to perform this I/O operation.
+                // Would block errors はOSがこのI/Oのオペレーションを実行する準備ができていないことを表す
                 Err(ref err) if self.would_block(err) => {}
-                // Got interrupted (how rude!), we'll try again.
+                // 割り込みが入った場合やり直す
                 Err(ref err) if self.interrupted(err) => {
                     return self.handle_connection_event(registry, connection, event)
                 }
-                // Other errors we'll consider fatal.
+                // 他のエラーは致命的なエラーとして処理
                 Err(err) => return Err(err),
             }
         }
@@ -159,12 +151,11 @@ impl TcpServer {
             let mut connection_closed = false;
             let mut received_data = vec![0; 4096];
             let mut bytes_read = 0;
-            // We can (maybe) read from the connection.
+            // 該当の接続から受信できる可能性がある
             loop {
                 match connection.read(&mut received_data[bytes_read..]) {
                     Ok(0) => {
-                        // Reading 0 bytes means the other side has closed the
-                        // connection or is done writing, then so are we.
+                        // 0 bytes の受信の場合は、対抗が接続をクローズしたか、書き込みが完了している
                         connection_closed = true;
                         break;
                     }
@@ -174,11 +165,10 @@ impl TcpServer {
                             received_data.resize(received_data.len() + 1024, 0);
                         }
                     }
-                    // Would block "errors" are the OS's way of saying that the
-                    // connection is not actually ready to perform this I/O operation.
+                    // Would block errors はOSがこのI/Oのオペレーションを実行する準備ができていないことを表す
                     Err(ref err) if self.would_block(err) => break,
                     Err(ref err) if self.interrupted(err) => continue,
-                    // Other errors we'll consider fatal.
+                    // 他のエラーは致命的なエラーとして処理
                     Err(err) => return Err(err),
                 }
             }

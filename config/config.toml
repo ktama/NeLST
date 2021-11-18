@@ -1,5 +1,6 @@
 [load_test]
-type = "client"
+is_server = false
 protocol = "tcp"
-target = "127.0.0.1:13264"
+source = "127.0.0.1:50000"
+target = "127.0.0.1:50001"
 packet_size = 10

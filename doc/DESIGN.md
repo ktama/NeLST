@@ -3,11 +3,7 @@
 設計メモに近いかもしれない。
 随時整理していく。
 
-低レイヤの処理も作る想定だったので、
 [tokio-rs/mio - GitHub](https://github.com/tokio-rs/mio)
-を使う想定だったが、まだRust自体の理解が追いつかないので
-[tokio-rs/tokio - GitHub](https://github.com/tokio-rs/tokio)
-で作成していく。
 
 # 負荷テスト
 
@@ -33,4 +29,3 @@ TCPのみ
 # 参照
 
 [tokio-rs/mio - GitHub](https://github.com/tokio-rs/mio)
-[tokio-rs/tokio - GitHub](https://github.com/tokio-rs/tokio)

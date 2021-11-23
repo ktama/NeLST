@@ -21,7 +21,7 @@ impl TcpServer {
         );
         TcpServer {
             bind_addr: bind_addr_config,
-            data: vec![0x1; packet_size_config],
+            data: vec![0x31; packet_size_config],
         }
     }
 

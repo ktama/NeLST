@@ -1,8 +1,7 @@
 use log::info;
 use mio::event::Event;
-use mio::net::{TcpListener, TcpStream};
-use mio::{Events, Interest, Poll, Registry, Token};
-use std::collections::HashMap;
+use mio::net::TcpStream;
+use mio::{Events, Interest, Poll, Token};
 use std::io::{self, Read, Write};
 use std::str::from_utf8;
 
@@ -43,6 +42,7 @@ impl TcpClient {
         )?;
 
         // Start an event loop.
+        let mut i = 0;
         loop {
             // Poll Mio for events, blocking until we get an event.
             poll.poll(&mut events, None)?;
@@ -53,40 +53,91 @@ impl TcpClient {
                 // determine for which socket the event is.
                 match event.token() {
                     Self::CLIENT => {
-                        if event.is_writable() {
-                            match client.write(&self.data) {
-                                Ok(n) if n < self.data.len() => {
-                                    if let Ok(str_buf) = from_utf8(tmp) {
-                                        info!("Sent data: {}", str_buf.trim_end());
-                                    } else {
-                                        info!("Sent (none UTF-8) data: {:?}", tmp);
-                                    }
-                                    return Err(io::ErrorKind::WriteZero.into());
-                                }
-                                Ok(_) => {}
-                                Err(ref err) if self.would_block(err) => {}
-                                Err(ref err) if self.interrupted(err) => {
-                                    // TODO:割り込みが入った場合やり直す
-                                }
-                                // 他のエラーは致命的なエラーとして処理
-                                Err(err) => return Err(err),
-                            }
-                            // We can (likely) write to the socket without blocking.
-                        }
-
-                        if event.is_readable() {
-                            // We can (likely) read from the socket without blocking.
-                        }
-
-                        // Since the server just shuts down the connection, let's
-                        // just exit from our event loop.
-                        return Ok(());
+                        self.handle_connection_event(&mut client, event);
                     }
                     // We don't expect any events with tokens other than those we provided.
                     _ => unreachable!(),
                 }
             }
+            i = i + 1;
+            if i > 10 {
+                break;
+            }
         }
+        return Ok(());
+    }
+
+    fn handle_connection_event(
+        &self,
+        connection: &mut TcpStream,
+        event: &Event,
+    ) -> io::Result<bool> {
+        if event.is_writable() {
+            match connection.write(&self.data) {
+                Ok(n) if n < self.data.len() => {
+                    let tmp = &self.data;
+                    if let Ok(str_buf) = from_utf8(tmp) {
+                        info!("Sent data: {}", str_buf.trim_end());
+                    } else {
+                        info!("Sent (none UTF-8) data: {:?}", tmp);
+                    }
+                    return Err(io::ErrorKind::WriteZero.into());
+                }
+                Ok(_) => {}
+                Err(ref err) if self.would_block(err) => {}
+                Err(ref err) if self.interrupted(err) => {
+                    return self.handle_connection_event(connection, event);
+                }
+                // 他のエラーは致命的なエラーとして処理
+                Err(err) => return Err(err),
+            }
+            // We can (likely) write to the socket without blocking.
+        }
+
+        if event.is_readable() {
+            let mut connection_closed = false;
+            let mut received_data = vec![0; 4096];
+            let mut bytes_read = 0;
+            // 該当の接続から受信できる可能性がある
+            loop {
+                match connection.read(&mut received_data[bytes_read..]) {
+                    Ok(0) => {
+                        // 0 bytes の受信の場合は、対抗が接続をクローズしたか、書き込みが完了している
+                        connection_closed = true;
+                        break;
+                    }
+                    Ok(n) => {
+                        bytes_read += n;
+                        if bytes_read == received_data.len() {
+                            received_data.resize(received_data.len() + 1024, 0);
+                        }
+                    }
+                    // Would block errors はOSがこのI/Oのオペレーションを実行する準備ができていないことを表す
+                    Err(ref err) if self.would_block(err) => break,
+                    Err(ref err) if self.interrupted(err) => continue,
+                    // 他のエラーは致命的なエラーとして処理
+                    Err(err) => return Err(err),
+                }
+            }
+
+            if bytes_read != 0 {
+                let received_data = &received_data[..bytes_read];
+                if let Ok(str_buf) = from_utf8(received_data) {
+                    info!("Received data: {}", str_buf.trim_end());
+                } else {
+                    info!("Received (none UTF-8) data: {:?}", received_data);
+                }
+            }
+
+            if connection_closed {
+                info!("Connection closed");
+                return Ok(true);
+            }
+        }
+
+        // Since the server just shuts down the connection, let's
+        // just exit from our event loop.
+        return Ok(false);
     }
 
     fn would_block(&self, err: &io::Error) -> bool {

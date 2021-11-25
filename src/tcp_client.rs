@@ -1,9 +1,12 @@
 use log::info;
 use mio::event::Event;
 use mio::net::TcpStream;
-use mio::{Events, Interest, Poll, Token};
+use mio::{Events, Interest, Poll, Token, Waker};
 use std::io::{self, Read, Write};
 use std::str::from_utf8;
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 
 pub struct TcpClient {
     target_addr: std::net::SocketAddr,
@@ -12,6 +15,7 @@ pub struct TcpClient {
 
 impl TcpClient {
     const CLIENT: Token = Token(1);
+    const WAKE_TOKEN: Token = Token(10);
 
     pub fn new(target_addr_config: std::net::SocketAddr, packet_size_config: usize) -> TcpClient {
         info!(
@@ -41,6 +45,16 @@ impl TcpClient {
             Interest::READABLE | Interest::WRITABLE,
         )?;
 
+        let waker = Arc::new(Waker::new(poll.registry(), Self::WAKE_TOKEN)?);
+        let waker_clone = waker.clone();
+
+        let handle = thread::spawn(move || {
+            for i in 1..100 {
+                thread::sleep(Duration::from_millis(1000));
+                waker_clone.wake().expect("unable to wake");
+            }
+        });
+
         // Start an event loop.
         let mut i = 0;
         loop {
@@ -51,8 +65,17 @@ impl TcpClient {
             for event in events.iter() {
                 // We can use the token we previously provided to `register` to
                 // determine for which socket the event is.
+                info!(
+                    "Event Token: {:?}, Writable: {}, Readable: {}",
+                    event.token(),
+                    event.is_writable(),
+                    event.is_readable()
+                );
                 match event.token() {
                     Self::CLIENT => {
+                        self.handle_connection_event(&mut client, event);
+                    }
+                    Self::WAKE_TOKEN => {
                         self.handle_connection_event(&mut client, event);
                     }
                     // We don't expect any events with tokens other than those we provided.
@@ -60,7 +83,7 @@ impl TcpClient {
                 }
             }
             i = i + 1;
-            if i > 10 {
+            if i >= 100 {
                 break;
             }
         }
@@ -73,6 +96,7 @@ impl TcpClient {
         event: &Event,
     ) -> io::Result<bool> {
         if event.is_writable() {
+            // if true {
             match connection.write(&self.data) {
                 Ok(n) if n < self.data.len() => {
                     let tmp = &self.data;

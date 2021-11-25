@@ -28,7 +28,7 @@ pub fn execute_load_test(mode: (&str, &str)) {
             let size_config_integer = CONFIG["load_test"]["packet_size"].as_integer().unwrap();
             let size_config = size_config_integer as usize;
             let udp = tcp_client::TcpClient::new(target_addr, size_config);
-            udp.test_traffic_load();
+            udp.test_traffic_load().unwrap();
         }
         ("client", "udp") => {
             info!("Udp Client");
@@ -40,7 +40,7 @@ pub fn execute_load_test(mode: (&str, &str)) {
             let size_config_integer = CONFIG["load_test"]["packet_size"].as_integer().unwrap();
             let size_config = size_config_integer as usize;
             let tcp = tcp_server::TcpServer::new(bind_config, size_config);
-            tcp.test_traffic_load();
+            tcp.test_traffic_load().unwrap();
         }
         ("server", "udp") => {
             info!("Udp Server");

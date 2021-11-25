@@ -29,3 +29,7 @@ TCPのみ
 # 参照
 
 [tokio-rs/mio - GitHub](https://github.com/tokio-rs/mio)
+[Crate mio - Rust](https://docs.rs/mio/0.8.0/mio/index.html)
+[Struct std::sync::RwLock - Rust](https://doc.rust-lang.org/std/sync/struct.RwLock.html)
+[Rust入門 Chapter 18 並列処理 - Zenn](https://zenn.dev/mebiusbox/books/22d4c1ed9b0003/viewer/98dc80)
+[Rust はどのようにして安全な並列処理を提供するのか - Qiita](https://qiita.com/nirasan/items/97263103f076bd525a7b)

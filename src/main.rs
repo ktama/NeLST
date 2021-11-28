@@ -13,14 +13,23 @@ fn main() {
 
     let is_server = CONFIG["load_test"]["is_server"].as_bool().unwrap();
     let protocol = CONFIG["load_test"]["protocol"].as_str().unwrap();
-    let mode = (if is_server { "server" } else { "client" }, protocol);
+    let is_send_only = CONFIG["load_test"]["is_send_only"].as_bool().unwrap();
+    let mode = (
+        if is_server { "server" } else { "client" },
+        protocol,
+        if is_send_only {
+            "send only"
+        } else {
+            "to echo server"
+        },
+    );
 
     execute_load_test(mode);
 }
 
-pub fn execute_load_test(mode: (&str, &str)) {
-    info!("Load Test Mode: {} & {}", mode.0, mode.1);
-    match mode {
+pub fn execute_load_test(mode: (&str, &str, &str)) {
+    info!("Load Test Mode: {} & {} & {}", mode.0, mode.1, mode.2);
+    match (mode.0, mode.1) {
         ("client", "tcp") => {
             info!("Tcp Client");
             let target = CONFIG["load_test"]["target"].as_str().unwrap();
@@ -28,7 +37,7 @@ pub fn execute_load_test(mode: (&str, &str)) {
             let size_config_integer = CONFIG["load_test"]["packet_size"].as_integer().unwrap();
             let size_config = size_config_integer as usize;
             let udp = tcp_client::TcpClient::new(target_addr, size_config);
-            udp.test_traffic_load().unwrap();
+            udp.test_traffic_load(mode.2).unwrap();
         }
         ("client", "udp") => {
             info!("Udp Client");

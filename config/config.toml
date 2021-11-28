@@ -1,5 +1,6 @@
 [load_test]
 is_server = false
+is_send_only = false
 protocol = "tcp"
 source = "127.0.0.1:50000"
 target = "127.0.0.1:50001"

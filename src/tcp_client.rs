@@ -14,8 +14,8 @@ pub struct TcpClient {
 }
 
 impl TcpClient {
-    const CLIENT: Token = Token(1);
-    const WAKE_TOKEN: Token = Token(10);
+    const CLIENT: Token = Token(2);
+    const WAKER: Token = Token(1);
 
     pub fn new(target_addr_config: std::net::SocketAddr, packet_size_config: usize) -> TcpClient {
         info!(
@@ -45,7 +45,7 @@ impl TcpClient {
             Interest::READABLE | Interest::WRITABLE,
         )?;
 
-        let waker = Arc::new(Waker::new(poll.registry(), Self::WAKE_TOKEN)?);
+        let waker = Arc::new(Waker::new(poll.registry(), Self::WAKER)?);
         let waker_clone = waker.clone();
         let counter = Arc::new(RwLock::new(0));
         {
@@ -74,7 +74,7 @@ impl TcpClient {
                     event.is_readable()
                 );
                 match event.token() {
-                    Self::CLIENT | Self::WAKE_TOKEN => match handle {
+                    Self::CLIENT | Self::WAKER => match handle {
                         "send only" => {
                             match self.handle_send_only_connection_event(&mut client, event) {
                                 // 接続維持

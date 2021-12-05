@@ -1,10 +1,13 @@
 use log::info;
 use mio::event::Event;
 use mio::net::{TcpListener, TcpStream};
-use mio::{Events, Interest, Poll, Registry, Token};
+use mio::{Events, Interest, Poll, Registry, Token, Waker};
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::str::from_utf8;
+use std::sync::{Arc, RwLock};
+use std::thread;
+use std::time::Duration;
 
 pub struct TcpServer {
     bind_addr: std::net::SocketAddr,
@@ -13,6 +16,7 @@ pub struct TcpServer {
 
 impl TcpServer {
     const SERVER: Token = Token(0);
+    const WAKER: Token = Token(1);
 
     pub fn new(bind_addr_config: std::net::SocketAddr, packet_size_config: usize) -> TcpServer {
         info!(
@@ -46,9 +50,27 @@ impl TcpServer {
         // `Token` -> `TcpStream` のマップ
         let mut connections = HashMap::new();
         //  着信接続のユニークトークン
-        let mut unique_token = Token(Self::SERVER.0 + 1);
+        let mut unique_token = Token(Self::WAKER.0 + 1);
 
-        // Start an event loop.
+        let waker = Arc::new(Waker::new(poll.registry(), Self::WAKER)?);
+        let waker_clone = waker.clone();
+        let counter = Arc::new(RwLock::new(0));
+        {
+            let counter = Arc::clone(&counter);
+
+            thread::spawn(move || {
+                while *counter.read().unwrap() < 100 {
+                    thread::sleep(Duration::from_nanos(1000));
+                    info!("wake {}", *counter.read().unwrap());
+                    {
+                        let mut w = counter.write().unwrap();
+                        *w += 1;
+                    }
+                    waker_clone.wake().expect("unable to wake");
+                }
+            });
+        }
+
         loop {
             // イベントが発生するまで待機 Poll Mio
             poll.poll(&mut events, None)?;
@@ -85,6 +107,12 @@ impl TcpServer {
 
                         connections.insert(token, connection);
                     },
+                    Self::WAKER => {
+                        // WAKER の場合は全ての接続へ送信
+                        for (_, mut connection) in connections {
+                            self.handle_connection_event(poll.registry(), &mut connection, event);
+                        }
+                    }
                     token => {
                         // TCP接続を受信した可能性がある
                         let done = if let Some(connection) = connections.get_mut(&token) {

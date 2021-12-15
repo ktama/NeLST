@@ -1,4 +1,16 @@
+use pnet::packet::ip::IpNextHeaderProtocols;
+use pnet::packet::tcp::{self, MutableTcpPacket, TcpFlags};
+use pnet::transport::{
+    self, TransportChannelType, TransportProtocol, TransportReceiver, TransportSender,
+};
 impl PortScan {
+    enum ScanType{
+        Syn = TcpFlags::SYN as isize,
+        Fin = TcpFlags::FIN as isize,
+        Xmas = (TcpFlags::FIN | TcpFlags::URG | TcpFlags::PSH) as isize,
+        Null = 0,
+    }
+
     pub fn scan() {}
 
     fn tcp_scan() {}

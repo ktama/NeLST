@@ -11,7 +11,10 @@ impl PortScan {
         Null = 0,
     }
 
-    pub fn scan() {}
+    pub fn scan(scanType :ScanType) {
+        match scanType {
+            ScanType.Syn => syn_scan()
+    }
 
     fn tcp_scan() {}
     fn syn_scan() {}

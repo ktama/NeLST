@@ -10,6 +10,14 @@ impl PortScan {
         Xmas = (TcpFlags::FIN | TcpFlags::URG | TcpFlags::PSH) as isize,
         Null = 0,
     }
+    
+    struct PacketInfo {
+        my_ipaddr: Ipv4Addr,
+        target_ipaddr: Ipv4Addr,
+        my_port: u16,
+        maximum_port: u16,
+        scan_type: ScanType,
+    }
 
     pub fn scan(scanType :ScanType) {
         match scanType {
@@ -22,4 +30,5 @@ impl PortScan {
     fn xmas_scan() {}
     fn null_scan() {}
     fn udp_scan() {}
+
 }

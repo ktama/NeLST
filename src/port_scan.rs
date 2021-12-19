@@ -4,6 +4,8 @@ use pnet::transport::{
     self, TransportChannelType, TransportProtocol, TransportReceiver, TransportSender,
 };
 impl PortScan {
+    const TCP_SIZE: usize = 20;
+
     enum ScanType{
         Syn = TcpFlags::SYN as isize,
         Fin = TcpFlags::FIN as isize,

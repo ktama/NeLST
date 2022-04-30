@@ -27,12 +27,26 @@ TCPのみ
 
 # ポートスキャンテスト
 
-* TCPスキャン
-* SYNスキャン
-* FINスキャン
-* クリスマスツリースキャン
-* NULLスキャン
-* UDPスキャン
+## TCPスキャン
+
+```mermaid
+sequenceDiagram
+    loop Port
+        Client -->> Server: SYN
+        Server -->> Client: SYN/ACK
+        Client -->> Server: ACK
+    end
+```
+
+## SYNスキャン
+
+## FINスキャン
+
+## Xmasスキャン
+
+## NULLスキャン
+
+## UDPスキャン
 
 
 # 参照

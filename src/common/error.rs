@@ -69,6 +69,10 @@ pub enum NelstError {
     #[error("Configuration error: {message}")]
     Config { message: String },
 
+    /// スキャンエラー
+    #[error("Scan error: {message}")]
+    Scan { message: String },
+
     /// その他のエラー
     #[error("{0}")]
     Other(#[from] anyhow::Error),
@@ -156,6 +160,13 @@ impl NelstError {
     /// 設定エラーを生成するヘルパー
     pub fn config(message: impl Into<String>) -> Self {
         NelstError::Config {
+            message: message.into(),
+        }
+    }
+
+    /// スキャンエラーを生成するヘルパー
+    pub fn scan(message: impl Into<String>) -> Self {
+        NelstError::Scan {
             message: message.into(),
         }
     }

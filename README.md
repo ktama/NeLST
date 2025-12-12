@@ -10,6 +10,8 @@
 - 🚀 **負荷テスト**: トラフィック負荷テスト、コネクション負荷テスト、HTTP負荷テスト
 - 🌐 **HTTP対応**: GET/POST/PUT/DELETE、カスタムヘッダー、HTTP/2サポート
 - 🔍 **セキュリティスキャン**: ポートスキャン（TCP Connect, SYN, FIN, Xmas, NULL, UDP）
+- 🔐 **SSL/TLS検査**: 証明書情報取得、有効期限チェック、暗号スイート検査
+- 🏷️ **サービス検出**: バナー取得、サービス識別、バージョン検出
 - 🖥️ **テストサーバ**: エコーサーバ、シンクサーバ、フラッドサーバ、HTTPサーバ
 - 📊 **詳細な統計**: レイテンシ（P50/P95/P99）、スループット、成功率
 - 📁 **複数の出力形式**: テキスト、JSON、ファイル出力
@@ -111,6 +113,37 @@ nelst scan port -t 192.168.1.100 --ports 22,80,443,8080
 
 # 並列度を上げてスキャン
 nelst scan port -t 192.168.1.100 --ports 1-65535 -c 500
+
+# SYNスキャン（root権限が必要）
+sudo nelst scan port -t 192.168.1.100 -m syn --ports 1-1024
+
+# FIN/Xmas/NULLスキャン（ステルス性が高い）
+sudo nelst scan port -t 192.168.1.100 -m fin
+sudo nelst scan port -t 192.168.1.100 -m xmas
+sudo nelst scan port -t 192.168.1.100 -m null
+
+# UDPスキャン
+nelst scan port -t 192.168.1.100 -m udp --ports 53,123,161,500
+```
+
+#### サービス検出・バナー取得
+
+```bash
+# サービス検出を有効にしてスキャン
+nelst scan port -t 192.168.1.100 --ports 1-1000 --service-detection
+
+# バナー取得を有効にしてスキャン
+nelst scan port -t 192.168.1.100 --ports 22,80,443 --grab-banner
+```
+
+#### SSL/TLS検査
+
+```bash
+# オープンしているSSLポートのTLS情報と証明書を検査
+nelst scan port -t 192.168.1.100 --ports 443,8443 --ssl-check
+
+# ホスト名を指定してSSL証明書検証
+nelst scan port -t 192.168.1.100 --ports 443 --ssl-check --hostname example.com
 ```
 
 ### テストサーバ
@@ -249,7 +282,12 @@ src/
 │   ├── connection.rs # コネクション負荷テスト
 │   └── http.rs       # HTTP負荷テスト
 ├── scan/             # スキャン実装
-│   └── tcp_connect.rs
+│   ├── tcp_connect.rs # TCP Connectスキャン
+│   ├── syn.rs        # SYN/FIN/Xmas/NULLスキャン
+│   ├── udp.rs        # UDPスキャン
+│   ├── raw_socket.rs # Raw Socket基盤
+│   ├── service.rs    # サービス検出
+│   └── ssl.rs        # SSL/TLS検査
 └── server/           # サーバ実装
     ├── echo.rs       # エコーサーバ
     ├── sink.rs       # シンクサーバ
@@ -277,7 +315,11 @@ Issue や Pull Request を歓迎します。
   - HTTPテストサーバ（遅延・エラー率シミュレーション）
   - 結果ファイル出力
   - レート制限
-- [ ] SYN/FIN/Xmasスキャン、SSL検査（v0.3.0）
+- [x] セキュリティ機能強化（v0.3.0）
+  - SYN/FIN/Xmas/NULLスキャン（Raw Socket）
+  - UDPスキャン
+  - サービス検出・バナー取得
+  - SSL/TLS検査（証明書・暗号スイート）
 - [ ] 診断機能（ping/traceroute/DNS）（v0.4.0）
 - [ ] レポート機能、プロファイル管理（v0.5.0)
 

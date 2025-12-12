@@ -61,6 +61,18 @@ pub struct PortScanArgs {
     #[arg(long)]
     pub service_detection: bool,
 
+    /// バナー取得を有効化（サービス検出時に使用）
+    #[arg(long)]
+    pub grab_banner: bool,
+
+    /// SSL/TLS検査を有効化
+    #[arg(long)]
+    pub ssl_check: bool,
+
+    /// ホスト名（SSL証明書検証用）
+    #[arg(long)]
+    pub hostname: Option<String>,
+
     /// 結果出力ファイル
     #[arg(short, long, value_name = "FILE")]
     pub output: Option<String>,

@@ -225,55 +225,59 @@ rand = "0.8"
 
 ---
 
-## フェーズ 3: セキュリティ機能強化（v0.3.0）
+## フェーズ 3: セキュリティ機能強化（v0.3.0） ✅
 
 高度なスキャン機能の実装。
 
 ### 3.1 Raw Socket基盤
 
+**ファイル**: `src/scan/raw_socket.rs`
+
 **依存追加**:
 ```toml
 pnet = "0.35"
 socket2 = "0.5"
+libc = "0.2"
 ```
 
-- [ ] Raw socket権限チェック
-- [ ] パケット構築ユーティリティ
-- [ ] CAP_NET_RAWの説明・ガイド
+- [x] Raw socket権限チェック（`check_root_privileges()`）
+- [x] パケット構築ユーティリティ（`build_tcp_packet()`）
+- [x] TCPチェックサム計算（`tcp_checksum()`）
+- [x] CAP_NET_RAWの説明・ガイド（エラーメッセージにヒント）
 
 ### 3.2 SYNスキャン
 
 **ファイル**: `src/scan/syn.rs`
 
-- [ ] SYNパケット構築
-- [ ] SYN/ACK・RST応答解析
-- [ ] root権限チェック・エラーメッセージ
+- [x] SYNパケット構築
+- [x] SYN/ACK・RST応答解析
+- [x] root権限チェック・エラーメッセージ
 
 ### 3.3 その他のスキャン手法
 
-**ファイル**: `src/scan/fin.rs`, `src/scan/xmas.rs`, `src/scan/null.rs`
+**ファイル**: `src/scan/syn.rs`（共通実装）
 
-- [ ] FINスキャン
-- [ ] Xmasスキャン
-- [ ] NULLスキャン
-- [ ] 応答なし=オープンの判定ロジック
+- [x] FINスキャン
+- [x] Xmasスキャン
+- [x] NULLスキャン
+- [x] 応答なし=オープンの判定ロジック
 
 ### 3.4 UDPスキャン
 
 **ファイル**: `src/scan/udp.rs`
 
-- [ ] UDPパケット送信
-- [ ] ICMP Port Unreachable検出
-- [ ] タイムアウト処理
+- [x] UDPパケット送信
+- [ ] ICMP Port Unreachable検出（延期: Raw Socket必要）
+- [x] タイムアウト処理
 
 ### 3.5 サービス検出
 
 **ファイル**: `src/scan/service.rs`
 
-- [ ] バナー取得（`--grab-banner`）
-- [ ] サービス識別（SSH, HTTP, MySQL等）
-- [ ] バージョン検出（`--version-detection`）
-- [ ] サービスデータベース（JSON/TOML）
+- [x] バナー取得（`--grab-banner`）
+- [x] サービス識別（SSH, HTTP, SMTP, FTP, MySQL, Redis等）
+- [x] バージョン検出（バナーから抽出）
+- [ ] サービスデータベース（JSON/TOML）（延期: Phase 4）
 
 ### 3.6 SSL/TLS検査
 
@@ -281,31 +285,44 @@ socket2 = "0.5"
 
 **依存追加**:
 ```toml
-rustls = "0.23"
+rustls = { version = "0.23", features = ["ring"] }
 x509-parser = "0.16"
+webpki-roots = "0.26"
+tokio-rustls = { version = "0.26", features = ["ring"] }
 ```
 
-- [ ] 証明書情報取得
-- [ ] 有効期限チェック
-- [ ] 対応プロトコル検査（TLS 1.0-1.3, SSLv3）
-- [ ] 暗号スイート検査
-- [ ] 既知脆弱性チェック（POODLE, BEAST等）
-- [ ] グレード評価
+- [x] 証明書情報取得（Subject, Issuer, SAN, 鍵サイズ）
+- [x] 有効期限チェック（`days_until_expiry`）
+- [x] 対応プロトコル検査（TLSバージョン）
+- [x] 暗号スイート検査
+- [ ] 既知脆弱性チェック（POODLE, BEAST等）（延期: Phase 4）
+- [ ] グレード評価（延期: Phase 4）
 
 ### 3.7 スキャン結果比較（diff）
 
-**ファイル**: `src/report/diff.rs`
-
-- [ ] `--diff <FILE>` オプション
-- [ ] 新規オープンポート検出
-- [ ] クローズされたポート検出
-- [ ] サービス変更検出
+- [ ] `--diff <FILE>` オプション（延期: Phase 4）
+- [ ] 新規オープンポート検出（延期: Phase 4）
+- [ ] クローズされたポート検出（延期: Phase 4）
+- [ ] サービス変更検出（延期: Phase 4）
 
 ---
 
 ## フェーズ 4: 診断・測定機能（v0.4.0）
 
 ネットワーク診断と帯域測定。
+
+### 4.0 Phase 2-3 からの延期項目
+
+以下の項目はPhase 2-3で延期され、Phase 4で対応予定：
+
+- [ ] ヒストグラム表示（`src/common/stats.rs`）
+- [ ] リアルタイム統計更新
+- [ ] バッチモード（`--batch <FILE>`）
+- [ ] ICMP Port Unreachable検出（UDP scan）
+- [ ] サービスデータベース（JSON/TOML）
+- [ ] SSL/TLS 既知脆弱性チェック（POODLE, BEAST等）
+- [ ] SSL/TLS グレード評価
+- [ ] スキャン結果比較（`--diff <FILE>`）
 
 ### 4.1 Ping
 
@@ -483,8 +500,8 @@ graph TD
 
 ### コード品質
 
-- [ ] `cargo clippy` 警告なし
-- [ ] `cargo fmt` 適用
+- [x] `cargo clippy` 警告なし
+- [x] `cargo fmt` 適用
 - [ ] 全公開APIにドキュメントコメント
 - [ ] エラーメッセージは日本語/英語対応可能な設計
 
@@ -520,4 +537,5 @@ graph TD
 4. [x] CLI基盤の実装（clap）
 5. [x] フェーズ1 MVPの実装
 6. [x] フェーズ2 コア機能の実装
-7. [ ] フェーズ3 セキュリティ機能を開始
+7. [x] フェーズ3 セキュリティ機能の実装
+8. [ ] フェーズ4 診断・測定機能を開始

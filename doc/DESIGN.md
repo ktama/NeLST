@@ -877,21 +877,57 @@ Hint: Verify the target is running and accessible.
 
 ---
 
-## 14. 将来の拡張案
+## 14. 実装状況（v0.3.0現在）
 
-### フェーズ2（v0.2.0）
+本設計書は最終目標を示しています。現在の実装状況については [PLAN.md](PLAN.md) を参照してください。
+
+### 実装済み（Phase 0-3）
+
+| 機能カテゴリ | 状態 | 備考 |
+|-------------|------|------|
+| CLI基盤 | ✅ 完了 | clap derive マクロ |
+| 負荷テスト（traffic/connection） | ✅ 完了 | TCP/UDP対応 |
+| HTTP負荷テスト | ✅ 完了 | GET/POST/PUT/DELETE, HTTP/2 |
+| テストサーバ | ✅ 完了 | echo/sink/flood/http |
+| ポートスキャン | ✅ 完了 | tcp/syn/fin/xmas/null/udp |
+| サービス検出 | ✅ 完了 | `--grab-banner`, `--service-detection` |
+| SSL/TLS検査 | ✅ 完了 | `--ssl-check` オプション |
+| 統計・出力 | ✅ 完了 | JSON出力、ファイル出力 |
+
+### 設計との差異
+
+現在の実装では、以下の点が設計と異なります：
+
+1. **SSL/TLS検査**: 独立サブコマンド（`scan ssl`）ではなく、`scan port --ssl-check` オプションとして統合
+2. **サービス検出**: 独立サブコマンド（`scan service`）ではなく、`scan port --service-detection --grab-banner` として統合
+3. **脆弱性チェック・グレード評価**: Phase 4に延期
+4. **スキャン結果比較（diff）**: Phase 4に延期
+
+### 未実装（Phase 4-5）
+
+- ネットワーク診断（ping/traceroute/DNS/MTU）
+- 帯域幅・レイテンシ測定
+- プロファイル管理
+- レポート機能（HTML/CSV/Markdown）
+- 設定ファイル対応
+
+---
+
+## 15. 将来の拡張案（v1.0.0以降）
+
+### 拡張フェーズ1
 - [ ] 分散負荷テスト（コーディネーター/ワーカーモデル）
 - [ ] WebSocket負荷テスト対応
 - [ ] gRPC負荷テスト対応
 - [ ] リアルタイムメトリクス送信（Prometheus/InfluxDB）
 
-### フェーズ3（v0.3.0）
+### 拡張フェーズ2
 - [ ] OS検出（TCP/IPスタックフィンガープリント）
 - [ ] 脆弱性データベース連携（CVE検出）
 - [ ] スクリプトエンジン（Lua/Rhai）
 - [ ] プラグインシステム
 
-### フェーズ4（v1.0.0）
+### 拡張フェーズ3
 - [ ] Web UI / ダッシュボード
 - [ ] スケジュール実行（cronライク）
 - [ ] アラート通知（Slack/Discord/Email）
@@ -899,7 +935,7 @@ Hint: Verify the target is running and accessible.
 
 ---
 
-## 15. 参照
+## 16. 参照
 
 - [tokio-rs/mio - GitHub](https://github.com/tokio-rs/mio)
 - [Crate mio - Rust](https://docs.rs/mio/latest/mio/)

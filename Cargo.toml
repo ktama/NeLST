@@ -57,6 +57,19 @@ http-body-util = "0.1"
 # ランダム
 rand = "0.8"
 
+# Raw socket / パケット操作
+pnet = "0.35"
+socket2 = "0.5"
+
+# SSL/TLS
+rustls = { version = "0.23", features = ["ring"] }
+x509-parser = "0.16"
+webpki-roots = "0.26"
+tokio-rustls = { version = "0.26", features = ["ring"] }
+
+# システム
+libc = "0.2"
+
 [dev-dependencies]
 # テスト用
 

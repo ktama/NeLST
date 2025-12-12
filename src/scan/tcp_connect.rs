@@ -2,7 +2,7 @@
 //!
 //! 通常のTCP 3ウェイハンドシェイクを完了させてポートの開閉を判定する。
 
-use crate::cli::scan::{parse_ports, PortScanArgs};
+use crate::cli::scan::{PortScanArgs, parse_ports};
 use crate::common::error::{NelstError, Result};
 use crate::common::output::create_progress_bar;
 use crate::common::stats::Timer;
@@ -16,7 +16,7 @@ use tokio::sync::{Mutex, Semaphore};
 use tracing::debug;
 
 /// よく使われるポートとサービス名のマッピング
-fn get_service_name(port: u16) -> Option<String> {
+pub fn get_service_name(port: u16) -> Option<String> {
     let service = match port {
         20 => "ftp-data",
         21 => "ftp",
@@ -129,8 +129,7 @@ pub async fn run(args: &PortScanArgs) -> Result<ScanResult> {
     let concurrency = args.concurrency;
 
     // ポートをパース
-    let ports = parse_ports(&args.ports)
-        .map_err(NelstError::argument)?;
+    let ports = parse_ports(&args.ports).map_err(NelstError::argument)?;
 
     let total_ports = ports.len();
 
@@ -185,9 +184,18 @@ pub async fn run(args: &PortScanArgs) -> Result<ScanResult> {
     let mut port_results = results.lock().await.clone();
     port_results.sort_by_key(|r| r.port);
 
-    let open_count = port_results.iter().filter(|r| r.state == PortState::Open).count();
-    let closed_count = port_results.iter().filter(|r| r.state == PortState::Closed).count();
-    let filtered_count = port_results.iter().filter(|r| r.state == PortState::Filtered).count();
+    let open_count = port_results
+        .iter()
+        .filter(|r| r.state == PortState::Open)
+        .count();
+    let closed_count = port_results
+        .iter()
+        .filter(|r| r.state == PortState::Closed)
+        .count();
+    let filtered_count = port_results
+        .iter()
+        .filter(|r| r.state == PortState::Filtered)
+        .count();
 
     Ok(ScanResult {
         target: target.to_string(),

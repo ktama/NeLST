@@ -197,7 +197,7 @@ fn run_load_command(command: &cli::load::LoadCommands, output: &Output) -> Resul
 
 /// スキャンコマンドを実行
 fn run_scan_command(command: &cli::scan::ScanCommands, output: &Output) -> Result<(), NelstError> {
-    use cli::scan::ScanCommands;
+    use cli::scan::{ScanCommands, ScanMethod};
 
     let rt = tokio::runtime::Runtime::new()?;
 
@@ -207,16 +207,137 @@ fn run_scan_command(command: &cli::scan::ScanCommands, output: &Output) -> Resul
             output.info("Target", &args.target.to_string());
             output.info("Method", &format!("{:?}", args.method));
             output.info("Ports", &args.ports);
+            if args.grab_banner {
+                output.info("Banner Grab", "enabled");
+            }
+            if args.ssl_check {
+                output.info("SSL Check", "enabled");
+            }
             output.newline();
 
             info!("Starting port scan on {}", args.target);
-            let result = rt.block_on(scan::tcp_connect::run(args))?;
+
+            // スキャン手法に応じて適切なモジュールを呼び出し
+            let result = match args.method {
+                ScanMethod::Tcp => rt.block_on(scan::tcp_connect::run(args))?,
+                ScanMethod::Syn | ScanMethod::Fin | ScanMethod::Xmas | ScanMethod::Null => {
+                    rt.block_on(scan::syn::run(args))?
+                }
+                ScanMethod::Udp => rt.block_on(scan::udp::run(args))?,
+            };
 
             output.section("OPEN PORTS");
             let _ = output.result(&result);
+
+            // サービス検出（オプション）
+            if args.service_detection || args.grab_banner {
+                let open_ports: Vec<u16> = result
+                    .ports
+                    .iter()
+                    .filter(|p| matches!(p.state, scan::tcp_connect::PortState::Open))
+                    .map(|p| p.port)
+                    .collect();
+
+                if !open_ports.is_empty() {
+                    output.section("SERVICE DETECTION");
+                    let services = rt.block_on(scan::service::detect_services(
+                        args.target,
+                        &open_ports,
+                        args.timeout,
+                        args.grab_banner,
+                        args.concurrency,
+                    ));
+
+                    for service in &services {
+                        let mut info_parts = Vec::new();
+                        if let Some(ref name) = service.name {
+                            info_parts.push(name.clone());
+                        }
+                        if let Some(ref product) = service.product {
+                            info_parts.push(product.clone());
+                        }
+                        if let Some(ref version) = service.version {
+                            info_parts.push(format!("({})", version));
+                        }
+                        if let Some(ref banner) = service.banner {
+                            let short_banner: String = banner.chars().take(50).collect();
+                            info_parts.push(format!("[{}...]", short_banner));
+                        }
+
+                        output.info(&format!("Port {}", service.port), &info_parts.join(" "));
+                    }
+                    output.newline();
+                }
+            }
+
+            // SSL/TLS検査（オプション）
+            if args.ssl_check {
+                let ssl_ports: Vec<u16> = result
+                    .ports
+                    .iter()
+                    .filter(|p| {
+                        matches!(p.state, scan::tcp_connect::PortState::Open)
+                            && is_likely_ssl_port(p.port)
+                    })
+                    .map(|p| p.port)
+                    .collect();
+
+                if !ssl_ports.is_empty() {
+                    output.section("SSL/TLS INSPECTION");
+                    let hostname = args.hostname.as_deref().unwrap_or(
+                        // IPアドレスをホスト名として使用
+                        "localhost",
+                    );
+
+                    let ssl_results = rt.block_on(scan::ssl::inspect_ssl_ports(
+                        args.target,
+                        &ssl_ports,
+                        hostname,
+                        args.timeout,
+                        args.concurrency,
+                    ));
+
+                    for ssl_info in &ssl_results {
+                        if ssl_info.is_valid {
+                            if let Some(ref tls_version) = ssl_info.tls_version {
+                                output.info(&format!("Port {}", ssl_info.port), tls_version);
+                            }
+                            if let Some(ref cert) = ssl_info.certificate {
+                                output.info("  Subject", &cert.subject);
+                                output.info("  Issuer", &cert.issuer);
+                                output.info(
+                                    "  Expiry",
+                                    &format!(
+                                        "{} ({}d)",
+                                        if cert.is_expired { "EXPIRED" } else { "Valid" },
+                                        cert.days_until_expiry
+                                    ),
+                                );
+                            }
+                        } else {
+                            let errors = ssl_info.errors.join(", ");
+                            output.info(
+                                &format!("Port {}", ssl_info.port),
+                                &format!("Error: {}", errors),
+                            );
+                        }
+                    }
+                    output.newline();
+                }
+            }
+
+            // ファイル出力
+            if let Some(ref path) = args.output {
+                save_result_to_file(&result, path)?;
+            }
             Ok(())
         }
     }
+}
+
+/// SSL/TLSが使用されている可能性が高いポートか判定
+fn is_likely_ssl_port(port: u16) -> bool {
+    matches!(port, 443 | 465 | 636 | 853 | 993 | 995 | 8443 | 9443)
 }
 
 /// サーバコマンドを実行

@@ -1,0 +1,519 @@
+# NeLST 実装計画
+
+DESIGN.mdに基づく段階的な実装計画。
+
+---
+
+## 実装フェーズ概要
+
+| フェーズ | バージョン | 目標 | 期間目安 |
+|---------|-----------|------|---------|
+| 0 | v0.0.x | 基盤整備・リファクタリング | 1週間 |
+| 1 | v0.1.0 | MVP（最小限の機能） | 2-3週間 |
+| 2 | v0.2.0 | コア機能完成 | 2-3週間 |
+| 3 | v0.3.0 | セキュリティ機能強化 | 2週間 |
+| 4 | v0.4.0 | 診断・測定機能 | 2週間 |
+| 5 | v0.5.0 | 運用機能・安定化 | 2週間 |
+
+---
+
+## フェーズ 0: 基盤整備（v0.0.x）
+
+既存コードのリファクタリングと新アーキテクチャへの移行準備。
+
+### 0.1 プロジェクト構造の整理
+
+- [ ] 新しいモジュール構造の作成
+  ```
+  src/
+  ├── cli/
+  ├── load/
+  ├── scan/
+  ├── server/
+  └── common/
+  ```
+- [ ] 既存の `tcp_client.rs`, `tcp_server.rs` を新構造へ移行
+- [ ] `initialize/` モジュールを `common/config.rs` へ統合
+
+### 0.2 依存関係の更新
+
+- [ ] `Cargo.toml` の依存関係を更新
+  ```toml
+  [dependencies]
+  clap = { version = "4", features = ["derive"] }
+  tokio = { version = "1", features = ["full"] }
+  mio = { version = "1", features = ["os-poll", "net"] }
+  serde = { version = "1", features = ["derive"] }
+  serde_json = "1"
+  tracing = "0.1"
+  tracing-subscriber = "0.3"
+  anyhow = "1"
+  thiserror = "1"
+  indicatif = "0.17"
+  chrono = { version = "0.4", features = ["serde"] }
+  dirs = "5"
+  ```
+
+### 0.3 エラーハンドリング基盤
+
+- [ ] `common/error.rs` - カスタムエラー型の定義
+- [ ] 終了コード（0-5）の実装
+- [ ] `anyhow` / `thiserror` によるエラー伝播
+
+### 0.4 ロギング基盤
+
+- [ ] `log4rs` から `tracing` への移行
+- [ ] `--verbose` フラグの実装
+- [ ] ログレベル制御
+
+---
+
+## フェーズ 1: MVP（v0.1.0）
+
+最小限の動作する製品。基本的な負荷テストとTCPスキャンが可能な状態。
+
+### 1.1 CLI基盤
+
+**ファイル**: `src/cli/mod.rs`
+
+- [ ] `clap` derive マクロによるCLI定義
+- [ ] グローバルオプション（`--verbose`, `--json`, `--quiet`）
+- [ ] サブコマンド構造（load, scan, server, help）
+
+```rust
+#[derive(Parser)]
+#[command(name = "nelst", version, about)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+    
+    #[arg(long, global = true)]
+    verbose: bool,
+    
+    #[arg(long, global = true)]
+    json: bool,
+}
+```
+
+### 1.2 負荷テスト - トラフィック（基本）
+
+**ファイル**: `src/load/traffic.rs`
+
+- [ ] TCP送信のみモード（`-m send`）
+- [ ] エコーモード（`-m echo`）
+- [ ] 基本オプション
+  - `-t, --target`
+  - `-d, --duration`
+  - `-s, --size`
+  - `-c, --concurrency`
+- [ ] 基本統計（送信数、成功率、レイテンシ）
+
+### 1.3 負荷テスト - コネクション（基本）
+
+**ファイル**: `src/load/connection.rs`
+
+- [ ] TCPコネクション確立テスト
+- [ ] `-n, --count` オプション
+- [ ] `--timeout` オプション
+- [ ] 成功/失敗カウント
+
+### 1.4 ポートスキャン（TCP Connect）
+
+**ファイル**: `src/scan/tcp_connect.rs`
+
+- [ ] TCP Connectスキャン実装
+- [ ] ポート範囲指定（`--ports 1-1024`）
+- [ ] 並列スキャン（`-c, --concurrency`）
+- [ ] タイムアウト設定
+- [ ] 結果表示（open/closed/filtered）
+
+### 1.5 テストサーバ（基本）
+
+**ファイル**: `src/server/echo.rs`, `src/server/sink.rs`
+
+- [ ] エコーサーバ
+- [ ] シンクサーバ
+- [ ] バインドアドレス設定（`-b, --bind`）
+
+### 1.6 出力フォーマット
+
+**ファイル**: `src/common/output.rs`
+
+- [ ] テキスト出力（デフォルト）
+- [ ] JSON出力（`--json`）
+- [ ] プログレスバー表示（`indicatif`）
+
+### 1.7 MVP完了条件
+
+- [ ] `nelst load traffic -t 127.0.0.1:8080 -d 10` が動作
+- [ ] `nelst load connection -t 127.0.0.1:8080 -n 100` が動作
+- [ ] `nelst scan port -t 127.0.0.1 --ports 1-1024` が動作
+- [ ] `nelst server echo -b 0.0.0.0:8080` が動作
+- [ ] 基本的なエラーハンドリングが機能
+
+---
+
+## フェーズ 2: コア機能完成（v0.2.0）
+
+主要機能の完成とUDP対応。
+
+### 2.1 UDP対応
+
+- [ ] `src/load/traffic.rs` - UDP送信モード
+- [ ] `src/server/echo.rs` - UDPエコーサーバ
+- [ ] `src/server/sink.rs` - UDPシンクサーバ
+
+### 2.2 HTTP負荷テスト
+
+**ファイル**: `src/load/http.rs`
+
+**依存追加**:
+```toml
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+```
+
+- [ ] GET/POST/PUT/DELETE メソッド
+- [ ] カスタムヘッダー（`-H`）
+- [ ] リクエストボディ（`-b`）
+- [ ] ファイルからボディ読み込み（`-b @file`）
+- [ ] `--insecure` オプション
+- [ ] `--follow-redirects` オプション
+- [ ] HTTP/2サポート
+
+### 2.3 HTTPテストサーバ
+
+**ファイル**: `src/server/http.rs`
+
+**依存追加**:
+```toml
+hyper = { version = "1", features = ["full"] }
+hyper-util = "0.1"
+http-body-util = "0.1"
+```
+
+- [ ] 固定レスポンスサーバ
+- [ ] 遅延シミュレーション（`--delay`）
+- [ ] エラー率設定（`--error-rate`）
+
+### 2.4 フラッドサーバ
+
+**ファイル**: `src/server/flood.rs`
+
+- [ ] 指定サイズのデータを送信し続ける
+- [ ] TCP/UDP両対応
+
+### 2.5 統計機能強化
+
+**ファイル**: `src/common/stats.rs`
+
+- [ ] パーセンタイル計算（P50, P95, P99）
+- [ ] ヒストグラム
+- [ ] リアルタイム統計更新
+- [ ] 結果のファイル出力（`-o, --output`）
+
+### 2.6 レート制限
+
+- [ ] `--rate` オプション実装
+- [ ] トークンバケットアルゴリズム
+
+### 2.7 バッチモード
+
+- [ ] `--batch <FILE>` オプション
+- [ ] ターゲットファイル読み込み
+- [ ] 順次/並列実行オプション
+
+---
+
+## フェーズ 3: セキュリティ機能強化（v0.3.0）
+
+高度なスキャン機能の実装。
+
+### 3.1 Raw Socket基盤
+
+**依存追加**:
+```toml
+pnet = "0.35"
+socket2 = "0.5"
+```
+
+- [ ] Raw socket権限チェック
+- [ ] パケット構築ユーティリティ
+- [ ] CAP_NET_RAWの説明・ガイド
+
+### 3.2 SYNスキャン
+
+**ファイル**: `src/scan/syn.rs`
+
+- [ ] SYNパケット構築
+- [ ] SYN/ACK・RST応答解析
+- [ ] root権限チェック・エラーメッセージ
+
+### 3.3 その他のスキャン手法
+
+**ファイル**: `src/scan/fin.rs`, `src/scan/xmas.rs`, `src/scan/null.rs`
+
+- [ ] FINスキャン
+- [ ] Xmasスキャン
+- [ ] NULLスキャン
+- [ ] 応答なし=オープンの判定ロジック
+
+### 3.4 UDPスキャン
+
+**ファイル**: `src/scan/udp.rs`
+
+- [ ] UDPパケット送信
+- [ ] ICMP Port Unreachable検出
+- [ ] タイムアウト処理
+
+### 3.5 サービス検出
+
+**ファイル**: `src/scan/service.rs`
+
+- [ ] バナー取得（`--grab-banner`）
+- [ ] サービス識別（SSH, HTTP, MySQL等）
+- [ ] バージョン検出（`--version-detection`）
+- [ ] サービスデータベース（JSON/TOML）
+
+### 3.6 SSL/TLS検査
+
+**ファイル**: `src/scan/ssl.rs`
+
+**依存追加**:
+```toml
+rustls = "0.23"
+x509-parser = "0.16"
+```
+
+- [ ] 証明書情報取得
+- [ ] 有効期限チェック
+- [ ] 対応プロトコル検査（TLS 1.0-1.3, SSLv3）
+- [ ] 暗号スイート検査
+- [ ] 既知脆弱性チェック（POODLE, BEAST等）
+- [ ] グレード評価
+
+### 3.7 スキャン結果比較（diff）
+
+**ファイル**: `src/report/diff.rs`
+
+- [ ] `--diff <FILE>` オプション
+- [ ] 新規オープンポート検出
+- [ ] クローズされたポート検出
+- [ ] サービス変更検出
+
+---
+
+## フェーズ 4: 診断・測定機能（v0.4.0）
+
+ネットワーク診断と帯域測定。
+
+### 4.1 Ping
+
+**ファイル**: `src/diag/ping.rs`
+
+**依存追加**:
+```toml
+surge-ping = "0.8"
+```
+
+- [ ] ICMP Echo Request/Reply
+- [ ] TCP ping（ICMP不可時の代替）
+- [ ] 統計表示（min/max/avg/stddev）
+
+### 4.2 Traceroute
+
+**ファイル**: `src/diag/trace.rs`
+
+- [ ] TTL増加によるホップ検出
+- [ ] UDP/TCP/ICMPモード
+- [ ] ホップごとのレイテンシ表示
+
+### 4.3 DNS解決
+
+**ファイル**: `src/diag/dns.rs`
+
+**依存追加**:
+```toml
+trust-dns-resolver = "0.23"
+```
+
+- [ ] A/AAAA/MX/TXT/NS/CNAME レコード
+- [ ] カスタムDNSサーバ指定
+- [ ] TCP/UDP切り替え
+- [ ] 解決時間測定
+
+### 4.4 MTU探索
+
+**ファイル**: `src/diag/mtu.rs`
+
+- [ ] Path MTU Discovery
+- [ ] DF（Don't Fragment）フラグ設定
+- [ ] 二分探索による最適MTU検出
+
+### 4.5 帯域幅測定
+
+**ファイル**: `src/bench/bandwidth.rs`
+
+- [ ] 帯域測定サーバ
+- [ ] 帯域測定クライアント
+- [ ] Upload/Download測定
+- [ ] 並列ストリーム
+- [ ] ジッター計算
+
+### 4.6 レイテンシ測定
+
+**ファイル**: `src/bench/latency.rs`
+
+- [ ] 継続的なレイテンシ測定
+- [ ] ヒストグラム表示
+- [ ] 異常値検出
+
+---
+
+## フェーズ 5: 運用機能・安定化（v0.5.0）
+
+運用に必要な機能と品質向上。
+
+### 5.1 プロファイル管理
+
+**ファイル**: `src/profile/manager.rs`
+
+- [ ] プロファイル保存（`--save-profile`）
+- [ ] プロファイル読み込み（`--profile`）
+- [ ] プロファイル一覧/表示/削除
+- [ ] エクスポート/インポート
+
+### 5.2 設定ファイル
+
+**ファイル**: `src/common/config.rs`
+
+- [ ] `~/.nelst/config.toml` 読み込み
+- [ ] `./nelst.toml` 読み込み（優先）
+- [ ] CLI引数 > 設定ファイルの優先順位
+- [ ] `--config` オプション
+
+### 5.3 レポート機能
+
+**ファイル**: `src/report/formatter.rs`
+
+- [ ] JSON出力
+- [ ] CSV出力
+- [ ] HTML出力
+- [ ] Markdown出力
+- [ ] 結果比較（`--compare`）
+- [ ] トレンド分析（`--trend`）
+
+### 5.4 ドキュメント
+
+- [ ] README.md 更新
+- [ ] インストール手順
+- [ ] 使用例（Examples）
+- [ ] マニュアルページ（man page）
+- [ ] `--help` メッセージの充実
+
+### 5.5 テスト
+
+- [ ] ユニットテスト（各モジュール）
+- [ ] 統合テスト（CLIレベル）
+- [ ] ベンチマークテスト
+- [ ] CI/CD設定（GitHub Actions）
+
+### 5.6 パッケージング
+
+- [ ] `cargo install` 対応
+- [ ] crates.io公開準備
+- [ ] バイナリリリース（Linux/macOS/Windows）
+- [ ] Docker イメージ
+
+---
+
+## タスク依存関係
+
+```mermaid
+graph TD
+    A[フェーズ0: 基盤整備] --> B[フェーズ1: MVP]
+    B --> C[フェーズ2: コア機能]
+    B --> D[フェーズ3: セキュリティ]
+    C --> E[フェーズ4: 診断・測定]
+    D --> E
+    C --> F[フェーズ5: 運用機能]
+    E --> F
+```
+
+### クリティカルパス
+
+1. CLI基盤 → 全機能
+2. 統計基盤 → 負荷テスト結果表示
+3. Raw Socket基盤 → SYN/FIN/Xmas/NULLスキャン
+4. 出力フォーマット → レポート機能
+
+---
+
+## 実装優先順位
+
+### 高優先度（Must Have）
+
+1. CLI基盤（clap）
+2. TCPトラフィック負荷テスト
+3. TCP Connectスキャン
+4. エコーサーバ
+5. 基本統計
+6. JSON出力
+
+### 中優先度（Should Have）
+
+7. HTTP負荷テスト
+8. SYNスキャン
+9. SSL/TLS検査
+10. サービス検出
+11. プロファイル管理
+12. UDP対応
+
+### 低優先度（Nice to Have）
+
+13. 診断機能（ping/traceroute/DNS）
+14. 帯域測定
+15. FIN/Xmas/NULLスキャン
+16. HTML/Markdownレポート
+17. トレンド分析
+
+---
+
+## 品質基準
+
+### コード品質
+
+- [ ] `cargo clippy` 警告なし
+- [ ] `cargo fmt` 適用
+- [ ] 全公開APIにドキュメントコメント
+- [ ] エラーメッセージは日本語/英語対応可能な設計
+
+### テストカバレッジ
+
+- [ ] ユニットテスト: 70%以上
+- [ ] 統合テスト: 主要ユースケースをカバー
+
+### パフォーマンス
+
+- [ ] 10,000 req/s 以上のスループット（負荷テストクライアント）
+- [ ] 1,000 ports/s 以上のスキャン速度
+- [ ] メモリ使用量 < 100MB（通常使用時）
+
+---
+
+## リスクと対策
+
+| リスク | 影響 | 対策 |
+|-------|------|------|
+| Raw socket権限 | SYN等のスキャンが動作しない | CAP_NET_RAW設定ガイドを提供 |
+| プラットフォーム差異 | macOS/Windows で動作しない | 条件付きコンパイル、CI で複数OS テスト |
+| 既存コードとの互換性 | リファクタリングで機能喪失 | 既存テストの移行、E2Eテスト |
+| 依存クレートの脆弱性 | セキュリティ問題 | `cargo audit` 定期実行 |
+
+---
+
+## 次のアクション
+
+1. [ ] フェーズ0のタスクを開始
+2. [ ] `Cargo.toml` 依存関係の更新
+3. [ ] 新しいディレクトリ構造の作成
+4. [ ] CLI基盤の実装（clap）

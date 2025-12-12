@@ -206,8 +206,8 @@ fn run_server_command(
             output.newline();
 
             info!("Starting flood server on {}", args.bind);
-            // TODO: フェーズ1で実装
-            todo!("Flood server not implemented yet")
+            rt.block_on(server::flood::run(args))?;
+            Ok(())
         }
     }
 }

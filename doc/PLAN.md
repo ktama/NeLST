@@ -17,13 +17,13 @@ DESIGN.mdに基づく段階的な実装計画。
 
 ---
 
-## フェーズ 0: 基盤整備（v0.0.x）
+## フェーズ 0: 基盤整備（v0.0.x） ✅
 
 既存コードのリファクタリングと新アーキテクチャへの移行準備。
 
 ### 0.1 プロジェクト構造の整理
 
-- [ ] 新しいモジュール構造の作成
+- [x] 新しいモジュール構造の作成
   ```
   src/
   ├── cli/
@@ -32,12 +32,12 @@ DESIGN.mdに基づく段階的な実装計画。
   ├── server/
   └── common/
   ```
-- [ ] 既存の `tcp_client.rs`, `tcp_server.rs` を新構造へ移行
-- [ ] `initialize/` モジュールを `common/config.rs` へ統合
+- [x] 既存の `tcp_client.rs`, `tcp_server.rs` を新構造へ移行
+- [x] `initialize/` モジュールを `common/config.rs` へ統合
 
 ### 0.2 依存関係の更新
 
-- [ ] `Cargo.toml` の依存関係を更新
+- [x] `Cargo.toml` の依存関係を更新
   ```toml
   [dependencies]
   clap = { version = "4", features = ["derive"] }
@@ -56,19 +56,19 @@ DESIGN.mdに基づく段階的な実装計画。
 
 ### 0.3 エラーハンドリング基盤
 
-- [ ] `common/error.rs` - カスタムエラー型の定義
-- [ ] 終了コード（0-5）の実装
-- [ ] `anyhow` / `thiserror` によるエラー伝播
+- [x] `common/error.rs` - カスタムエラー型の定義
+- [x] 終了コード（0-5）の実装
+- [x] `anyhow` / `thiserror` によるエラー伝播
 
 ### 0.4 ロギング基盤
 
-- [ ] `log4rs` から `tracing` への移行
-- [ ] `--verbose` フラグの実装
-- [ ] ログレベル制御
+- [x] `log4rs` から `tracing` への移行
+- [x] `--verbose` フラグの実装
+- [x] ログレベル制御
 
 ---
 
-## フェーズ 1: MVP（v0.1.0）
+## フェーズ 1: MVP（v0.1.0） ✅
 
 最小限の動作する製品。基本的な負荷テストとTCPスキャンが可能な状態。
 
@@ -76,9 +76,9 @@ DESIGN.mdに基づく段階的な実装計画。
 
 **ファイル**: `src/cli/mod.rs`
 
-- [ ] `clap` derive マクロによるCLI定義
-- [ ] グローバルオプション（`--verbose`, `--json`, `--quiet`）
-- [ ] サブコマンド構造（load, scan, server, help）
+- [x] `clap` derive マクロによるCLI定義
+- [x] グローバルオプション（`--verbose`, `--json`, `--quiet`）
+- [x] サブコマンド構造（load, scan, server, help）
 
 ```rust
 #[derive(Parser)]
@@ -99,69 +99,69 @@ struct Cli {
 
 **ファイル**: `src/load/traffic.rs`
 
-- [ ] TCP送信のみモード（`-m send`）
-- [ ] エコーモード（`-m echo`）
-- [ ] 基本オプション
+- [x] TCP送信のみモード（`-m send`）
+- [x] エコーモード（`-m echo`）
+- [x] 基本オプション
   - `-t, --target`
   - `-d, --duration`
   - `-s, --size`
   - `-c, --concurrency`
-- [ ] 基本統計（送信数、成功率、レイテンシ）
+- [x] 基本統計（送信数、成功率、レイテンシ）
 
 ### 1.3 負荷テスト - コネクション（基本）
 
 **ファイル**: `src/load/connection.rs`
 
-- [ ] TCPコネクション確立テスト
-- [ ] `-n, --count` オプション
-- [ ] `--timeout` オプション
-- [ ] 成功/失敗カウント
+- [x] TCPコネクション確立テスト
+- [x] `-n, --count` オプション
+- [x] `--timeout` オプション
+- [x] 成功/失敗カウント
 
 ### 1.4 ポートスキャン（TCP Connect）
 
 **ファイル**: `src/scan/tcp_connect.rs`
 
-- [ ] TCP Connectスキャン実装
-- [ ] ポート範囲指定（`--ports 1-1024`）
-- [ ] 並列スキャン（`-c, --concurrency`）
-- [ ] タイムアウト設定
-- [ ] 結果表示（open/closed/filtered）
+- [x] TCP Connectスキャン実装
+- [x] ポート範囲指定（`--ports 1-1024`）
+- [x] 並列スキャン（`-c, --concurrency`）
+- [x] タイムアウト設定
+- [x] 結果表示（open/closed/filtered）
 
 ### 1.5 テストサーバ（基本）
 
 **ファイル**: `src/server/echo.rs`, `src/server/sink.rs`
 
-- [ ] エコーサーバ
-- [ ] シンクサーバ
-- [ ] バインドアドレス設定（`-b, --bind`）
+- [x] エコーサーバ
+- [x] シンクサーバ
+- [x] バインドアドレス設定（`-b, --bind`）
 
 ### 1.6 出力フォーマット
 
 **ファイル**: `src/common/output.rs`
 
-- [ ] テキスト出力（デフォルト）
-- [ ] JSON出力（`--json`）
-- [ ] プログレスバー表示（`indicatif`）
+- [x] テキスト出力（デフォルト）
+- [x] JSON出力（`--json`）
+- [x] プログレスバー表示（`indicatif`）
 
 ### 1.7 MVP完了条件
 
-- [ ] `nelst load traffic -t 127.0.0.1:8080 -d 10` が動作
-- [ ] `nelst load connection -t 127.0.0.1:8080 -n 100` が動作
-- [ ] `nelst scan port -t 127.0.0.1 --ports 1-1024` が動作
-- [ ] `nelst server echo -b 0.0.0.0:8080` が動作
-- [ ] 基本的なエラーハンドリングが機能
+- [x] `nelst load traffic -t 127.0.0.1:8080 -d 10` が動作
+- [x] `nelst load connection -t 127.0.0.1:8080 -n 100` が動作
+- [x] `nelst scan port -t 127.0.0.1 --ports 1-1024` が動作
+- [x] `nelst server echo -b 0.0.0.0:8080` が動作
+- [x] 基本的なエラーハンドリングが機能
 
 ---
 
-## フェーズ 2: コア機能完成（v0.2.0）
+## フェーズ 2: コア機能完成（v0.2.0） ✅
 
 主要機能の完成とUDP対応。
 
 ### 2.1 UDP対応
 
-- [ ] `src/load/traffic.rs` - UDP送信モード
-- [ ] `src/server/echo.rs` - UDPエコーサーバ
-- [ ] `src/server/sink.rs` - UDPシンクサーバ
+- [x] `src/load/traffic.rs` - UDP送信モード
+- [x] `src/server/echo.rs` - UDPエコーサーバ
+- [x] `src/server/sink.rs` - UDPシンクサーバ
 
 ### 2.2 HTTP負荷テスト
 
@@ -169,16 +169,16 @@ struct Cli {
 
 **依存追加**:
 ```toml
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "http2"] }
 ```
 
-- [ ] GET/POST/PUT/DELETE メソッド
-- [ ] カスタムヘッダー（`-H`）
-- [ ] リクエストボディ（`-b`）
-- [ ] ファイルからボディ読み込み（`-b @file`）
-- [ ] `--insecure` オプション
-- [ ] `--follow-redirects` オプション
-- [ ] HTTP/2サポート
+- [x] GET/POST/PUT/DELETE メソッド
+- [x] カスタムヘッダー（`-H`）
+- [x] リクエストボディ（`-b`）
+- [x] ファイルからボディ読み込み（`-b @file`）
+- [x] `--insecure` オプション
+- [x] `--follow-redirects` オプション
+- [x] HTTP/2サポート（`--http2`）
 
 ### 2.3 HTTPテストサーバ
 
@@ -187,40 +187,41 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 **依存追加**:
 ```toml
 hyper = { version = "1", features = ["full"] }
-hyper-util = "0.1"
+hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
+rand = "0.8"
 ```
 
-- [ ] 固定レスポンスサーバ
-- [ ] 遅延シミュレーション（`--delay`）
-- [ ] エラー率設定（`--error-rate`）
+- [x] 固定レスポンスサーバ
+- [x] 遅延シミュレーション（`--delay`）
+- [x] エラー率設定（`--error-rate`）
 
 ### 2.4 フラッドサーバ
 
 **ファイル**: `src/server/flood.rs`
 
-- [ ] 指定サイズのデータを送信し続ける
-- [ ] TCP/UDP両対応
+- [x] 指定サイズのデータを送信し続ける
+- [x] TCP/UDP両対応
 
 ### 2.5 統計機能強化
 
 **ファイル**: `src/common/stats.rs`
 
-- [ ] パーセンタイル計算（P50, P95, P99）
-- [ ] ヒストグラム
-- [ ] リアルタイム統計更新
-- [ ] 結果のファイル出力（`-o, --output`）
+- [x] パーセンタイル計算（P50, P95, P99）
+- [ ] ヒストグラム（延期: Phase 4）
+- [ ] リアルタイム統計更新（延期: Phase 4）
+- [x] 結果のファイル出力（`-o, --output`）
 
 ### 2.6 レート制限
 
-- [ ] `--rate` オプション実装
-- [ ] トークンバケットアルゴリズム
+- [x] `--rate` オプション実装
+- [x] トークンバケットアルゴリズム
 
 ### 2.7 バッチモード
 
-- [ ] `--batch <FILE>` オプション
-- [ ] ターゲットファイル読み込み
-- [ ] 順次/並列実行オプション
+- [ ] `--batch <FILE>` オプション（延期: Phase 3）
+- [ ] ターゲットファイル読み込み（延期: Phase 3）
+- [ ] 順次/並列実行オプション（延期: Phase 3）
 
 ---
 
@@ -513,7 +514,10 @@ graph TD
 
 ## 次のアクション
 
-1. [ ] フェーズ0のタスクを開始
-2. [ ] `Cargo.toml` 依存関係の更新
-3. [ ] 新しいディレクトリ構造の作成
-4. [ ] CLI基盤の実装（clap）
+1. [x] フェーズ0のタスクを開始
+2. [x] `Cargo.toml` 依存関係の更新
+3. [x] 新しいディレクトリ構造の作成
+4. [x] CLI基盤の実装（clap）
+5. [x] フェーズ1 MVPの実装
+6. [x] フェーズ2 コア機能の実装
+7. [ ] フェーズ3 セキュリティ機能を開始

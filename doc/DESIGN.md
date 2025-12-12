@@ -111,13 +111,13 @@ nelst load http [OPTIONS]
 
 OPTIONS:
     -u, --url <URL>              ターゲットURL (必須)
-    -m, --method <METHOD>        HTTPメソッド [default: GET]
+    -X, --method <METHOD>        HTTPメソッド [default: GET]
     -H, --header <KEY:VALUE>     カスタムヘッダー（複数指定可）
     -b, --body <DATA|@FILE>      リクエストボディ
-    -t, --content-type <TYPE>    Content-Type [default: application/json]
     --follow-redirects           リダイレクトを追跡
     --insecure                   SSL証明書検証をスキップ
-    --http2                      HTTP/2を使用
+    --http2                      HTTP/2を優先使用
+    --timeout <MS>               リクエストタイムアウト [default: 30000]
 ```
 
 #### 使用例
@@ -128,7 +128,8 @@ nelst load http -u https://api.example.com/users -c 50 -d 30
 
 # POSTリクエスト（JSONボディ）
 nelst load http -u https://api.example.com/users \
-    -m POST \
+    -X POST \
+    -H "Content-Type: application/json" \
     -b '{"name": "test"}' \
     -c 20 -d 60
 
@@ -138,7 +139,13 @@ nelst load http -u https://api.example.com/protected \
     -c 10
 
 # ファイルからリクエストボディを読み込み
-nelst load http -u https://api.example.com/data -m POST -b @request.json
+nelst load http -u https://api.example.com/data -X POST -b @request.json
+
+# レート制限付き（100 req/s）、結果をファイルに保存
+nelst load http -u https://api.example.com -r 100 -o result.json
+
+# HTTP/2を優先使用
+nelst load http -u https://example.com --http2
 ```
 
 ### 2.6 バッチモード
@@ -545,11 +552,19 @@ SUBCOMMANDS:
     echo        エコーサーバ（受信データをそのまま返す）
     sink        シンクサーバ（受信のみ、応答なし）
     flood       フラッドサーバ（指定サイズのデータを送り続ける）
+    http        HTTPテストサーバ
 
-OPTIONS:
+OPTIONS (echo/sink/flood):
     -b, --bind <HOST:PORT>       バインドアドレス [default: 0.0.0.0:8080]
     -p, --protocol <tcp|udp>     プロトコル [default: tcp]
-    -s, --size <BYTES>           応答サイズ (echo/floodで使用)
+    -s, --size <BYTES>           応答サイズ (floodで使用)
+
+OPTIONS (http):
+    -b, --bind <HOST:PORT>       バインドアドレス [default: 0.0.0.0:8080]
+    --body <STRING>              レスポンスボディ [default: OK]
+    --status <CODE>              レスポンスステータスコード [default: 200]
+    --delay <MS>                 レスポンス遅延（ミリ秒） [default: 0]
+    --error-rate <0.0-1.0>       エラー率（5xxを返す確率） [default: 0]
 ```
 
 #### 使用例
@@ -558,14 +573,23 @@ OPTIONS:
 # エコーサーバ起動
 nelst server echo -b 0.0.0.0:8080
 
+# UDPエコーサーバ
+nelst server echo -b 0.0.0.0:8080 -p udp
+
 # UDPシンクサーバ
 nelst server sink -b 0.0.0.0:5000 -p udp
 
-# 遅延シミュレーション付きHTTPサーバ
+# フラッドサーバ（4KBデータを送信）
+nelst server flood -b 0.0.0.0:8080 -s 4096
+
+# HTTPテストサーバ
+nelst server http -b 0.0.0.0:8080
+
+# 遅延シミュレーション付きHTTPサーバ（100ms遅延）
 nelst server http -b 0.0.0.0:8080 --delay 100
 
 # 10%エラー率のHTTPサーバ（エラーハンドリングテスト用）
-nelst server http -b 0.0.0.0:8080 --error-rate 10
+nelst server http -b 0.0.0.0:8080 --error-rate 0.1
 
 # 帯域幅測定サーバ
 nelst server bandwidth -b 0.0.0.0:5201

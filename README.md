@@ -7,11 +7,12 @@
 
 ## 特徴
 
-- 🚀 **負荷テスト**: トラフィック負荷テスト、コネクション負荷テスト
+- 🚀 **負荷テスト**: トラフィック負荷テスト、コネクション負荷テスト、HTTP負荷テスト
+- 🌐 **HTTP対応**: GET/POST/PUT/DELETE、カスタムヘッダー、HTTP/2サポート
 - 🔍 **セキュリティスキャン**: ポートスキャン（TCP Connect, SYN, FIN, Xmas, NULL, UDP）
-- 🖥️ **テストサーバ**: エコーサーバ、シンクサーバ、フラッドサーバ
+- 🖥️ **テストサーバ**: エコーサーバ、シンクサーバ、フラッドサーバ、HTTPサーバ
 - 📊 **詳細な統計**: レイテンシ（P50/P95/P99）、スループット、成功率
-- 📁 **複数の出力形式**: テキスト、JSON
+- 📁 **複数の出力形式**: テキスト、JSON、ファイル出力
 
 ## インストール
 
@@ -73,6 +74,30 @@ nelst load traffic -t 192.168.1.100:8080 -c 10 -m send
 nelst load connection -t 192.168.1.100:8080 -n 1000 -c 100
 ```
 
+#### HTTP負荷テスト
+
+HTTPサーバへ継続的にリクエストを送信し負荷テストを行います。
+
+```bash
+# 基本的なGETリクエスト負荷テスト（60秒、10並列）
+nelst load http -u http://192.168.1.100:8080/api -d 60 -c 10
+
+# POSTリクエスト with カスタムヘッダー
+nelst load http -u http://192.168.1.100:8080/api \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -b '{"key":"value"}'
+
+# レート制限付き（100 req/s）、結果をファイルに保存
+nelst load http -u http://192.168.1.100:8080 -r 100 -o result.json
+
+# SSL証明書検証スキップ、リダイレクト追従
+nelst load http -u https://example.com --insecure --follow-redirects
+
+# HTTP/2を優先使用
+nelst load http -u https://example.com --http2
+```
+
 ### セキュリティスキャン
 
 #### ポートスキャン
@@ -96,8 +121,20 @@ nelst scan port -t 192.168.1.100 --ports 1-65535 -c 500
 # エコーサーバ（受信データをそのまま返す）
 nelst server echo -b 0.0.0.0:8080
 
+# UDPエコーサーバ
+nelst server echo -b 0.0.0.0:8080 -p udp
+
 # シンクサーバ（受信のみ、応答なし）
 nelst server sink -b 0.0.0.0:8080
+
+# フラッドサーバ（接続元へデータを送信し続ける）
+nelst server flood -b 0.0.0.0:8080 -s 4096
+
+# HTTPテストサーバ
+nelst server http -b 0.0.0.0:8080
+
+# HTTPサーバ with 遅延シミュレーション（50ms）とエラー率（10%）
+nelst server http -b 0.0.0.0:8080 --delay 50 --error-rate 0.1
 ```
 
 ## 設定ファイル
@@ -208,13 +245,16 @@ src/
 │   ├── output.rs     # 出力ユーティリティ
 │   └── stats.rs      # 統計収集
 ├── load/             # 負荷テスト実装
-│   ├── traffic.rs
-│   └── connection.rs
+│   ├── traffic.rs    # トラフィック負荷テスト
+│   ├── connection.rs # コネクション負荷テスト
+│   └── http.rs       # HTTP負荷テスト
 ├── scan/             # スキャン実装
 │   └── tcp_connect.rs
 └── server/           # サーバ実装
-    ├── echo.rs
-    └── sink.rs
+    ├── echo.rs       # エコーサーバ
+    ├── sink.rs       # シンクサーバ
+    ├── flood.rs      # フラッドサーバ
+    └── http.rs       # HTTPサーバ
 ```
 
 ## ライセンス
@@ -228,11 +268,18 @@ Issue や Pull Request を歓迎します。
 ## ロードマップ
 
 - [x] 基盤整備（v0.0.x）
-- [ ] MVP - 基本機能（v0.1.0）
-- [ ] HTTP負荷テスト、UDP対応（v0.2.0）
+- [x] MVP - 基本機能（v0.1.0）
+  - トラフィック/コネクション負荷テスト
+  - TCP Connectポートスキャン
+  - Echo/Sink/Floodサーバ
+- [x] HTTP負荷テスト、UDP対応（v0.2.0）
+  - HTTP負荷テスト（GET/POST/PUT/DELETE、HTTP/2）
+  - HTTPテストサーバ（遅延・エラー率シミュレーション）
+  - 結果ファイル出力
+  - レート制限
 - [ ] SYN/FIN/Xmasスキャン、SSL検査（v0.3.0）
 - [ ] 診断機能（ping/traceroute/DNS）（v0.4.0）
-- [ ] レポート機能、プロファイル管理（v0.5.0）
+- [ ] レポート機能、プロファイル管理（v0.5.0)
 
 詳細は [doc/DESIGN.md](doc/DESIGN.md) および [doc/PLAN.md](doc/PLAN.md) を参照してください。
 

@@ -42,6 +42,21 @@ chrono = { version = "0.4", features = ["serde"] }
 # ディレクトリ
 dirs = "5"
 
+# HTTP クライアント
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "rustls-tls",
+    "http2",
+] }
+
+# HTTP サーバ
+hyper = { version = "1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+
+# ランダム
+rand = "0.8"
+
 [dev-dependencies]
 # テスト用
 

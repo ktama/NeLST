@@ -28,12 +28,14 @@ mod scan;
 mod server;
 
 use clap::Parser;
+use serde::Serialize;
+use std::fs;
 use std::process::ExitCode;
 use tracing::{error, info};
-use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 use cli::{Cli, Commands};
-use common::error::{format_error, ExitStatus, NelstError};
+use common::error::{ExitStatus, NelstError, format_error};
 use common::output::Output;
 
 fn main() -> ExitCode {
@@ -84,6 +86,16 @@ fn init_logging(verbose: bool) {
         .init();
 }
 
+/// 結果をファイルに保存
+fn save_result_to_file<T: Serialize>(result: &T, path: &str) -> Result<(), NelstError> {
+    let json = serde_json::to_string_pretty(result)
+        .map_err(|e| NelstError::config(format!("Failed to serialize result: {}", e)))?;
+    fs::write(path, json)
+        .map_err(|e| NelstError::config(format!("Failed to write to file '{}': {}", path, e)))?;
+    info!("Results saved to {}", path);
+    Ok(())
+}
+
 /// コマンドを実行
 fn run_command(cli: &Cli, output: &Output) -> Result<(), NelstError> {
     // 設定ファイルを読み込み（オプション）
@@ -118,6 +130,11 @@ fn run_load_command(command: &cli::load::LoadCommands, output: &Output) -> Resul
 
             output.section("RESULTS");
             let _ = output.result(&result);
+
+            // ファイル出力
+            if let Some(ref path) = args.output {
+                save_result_to_file(&result, path)?;
+            }
             Ok(())
         }
         LoadCommands::Connection(args) => {
@@ -133,6 +150,46 @@ fn run_load_command(command: &cli::load::LoadCommands, output: &Output) -> Resul
 
             output.section("RESULTS");
             let _ = output.result(&result);
+
+            // ファイル出力
+            if let Some(ref path) = args.output {
+                save_result_to_file(&result, path)?;
+            }
+            Ok(())
+        }
+        LoadCommands::Http(args) => {
+            output.header("HTTP Load Test");
+            output.info("URL", &args.url);
+            output.info("Method", &args.method);
+            output.info("Duration", &format!("{}s", args.duration));
+            output.info("Concurrency", &args.concurrency.to_string());
+            if let Some(rate) = args.rate {
+                output.info("Rate Limit", &format!("{} req/s", rate));
+            }
+            if !args.headers.is_empty() {
+                output.info("Headers", &format!("{} custom", args.headers.len()));
+            }
+            if args.http2 {
+                output.info("Protocol", "HTTP/2");
+            }
+            if args.insecure {
+                output.info("TLS Verify", "disabled");
+            }
+            if args.follow_redirects {
+                output.info("Redirects", "follow");
+            }
+            output.newline();
+
+            info!("Starting HTTP load test to {}", args.url);
+            let result = rt.block_on(load::http::run(args))?;
+
+            output.section("RESULTS");
+            let _ = output.result(&result);
+
+            // ファイル出力
+            if let Some(ref path) = args.output {
+                save_result_to_file(&result, path)?;
+            }
             Ok(())
         }
     }
@@ -207,6 +264,24 @@ fn run_server_command(
 
             info!("Starting flood server on {}", args.bind);
             rt.block_on(server::flood::run(args))?;
+            Ok(())
+        }
+        ServerCommands::Http(args) => {
+            output.header("HTTP Test Server");
+            output.info("Bind", &format!("http://{}", args.bind));
+            output.info("Status", &args.status.to_string());
+            if args.delay > 0 {
+                output.info("Delay", &format!("{}ms", args.delay));
+            }
+            if args.error_rate > 0.0 {
+                output.info("Error Rate", &format!("{:.1}%", args.error_rate * 100.0));
+            }
+            output.newline();
+            output.message("Press Ctrl+C to stop the server.");
+            output.newline();
+
+            info!("Starting HTTP server on {}", args.bind);
+            rt.block_on(server::http::run(args))?;
             Ok(())
         }
     }

@@ -1,59 +1,213 @@
-mod initialize;
-use initialize::file_config::CONFIG;
-use log::{debug, error, info};
-use log4rs;
-use std::net::SocketAddr;
+//! NeLST - Network Load and Security Test
+//!
+//! ネットワークの負荷テストとセキュリティテストを行うCLIツール。
+//!
+//! # 機能
+//!
+//! - **負荷テスト**: トラフィック負荷テスト、コネクション負荷テスト
+//! - **セキュリティスキャン**: ポートスキャン（TCP Connect, SYN, FIN等）
+//! - **テストサーバ**: エコーサーバ、シンクサーバ、フラッドサーバ
+//!
+//! # 使用例
+//!
+//! ```bash
+//! # 負荷テスト
+//! nelst load traffic -t 127.0.0.1:8080 -d 60
+//!
+//! # ポートスキャン
+//! nelst scan port -t 192.168.1.1 --ports 1-1024
+//!
+//! # エコーサーバ起動
+//! nelst server echo -b 0.0.0.0:8080
+//! ```
 
-mod tcp_client;
-mod tcp_server;
+mod cli;
+mod common;
+mod load;
+mod scan;
+mod server;
 
-fn main() {
-    log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
-    debug!("initilized logger");
+use clap::Parser;
+use std::process::ExitCode;
+use tracing::{error, info};
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
-    let is_server = CONFIG["load_test"]["is_server"].as_bool().unwrap();
-    let protocol = CONFIG["load_test"]["protocol"].as_str().unwrap();
-    let is_send_only = CONFIG["load_test"]["is_send_only"].as_bool().unwrap();
-    let mode = (
-        if is_server { "server" } else { "client" },
-        protocol,
-        if is_send_only {
-            "send only"
-        } else {
-            "to echo server"
-        },
-    );
+use cli::{Cli, Commands};
+use common::error::{format_error, ExitStatus, NelstError};
+use common::output::Output;
 
-    execute_load_test(mode);
+fn main() -> ExitCode {
+    // CLIをパース
+    let cli = Cli::parse();
+
+    // ロギングを初期化
+    init_logging(cli.verbose);
+
+    // 出力ハンドラを作成
+    let output = Output::new(cli.json, cli.quiet);
+
+    // コマンドを実行
+    let result = run_command(&cli, &output);
+
+    match result {
+        Ok(_) => ExitCode::from(ExitStatus::Success),
+        Err(e) => {
+            if let Some(hint) = e.hint() {
+                output.error_with_hint(&e.to_string(), hint);
+            } else {
+                output.error(&e.to_string());
+            }
+            error!("{}", format_error(&e));
+            ExitCode::from(e.exit_status())
+        }
+    }
 }
 
-pub fn execute_load_test(mode: (&str, &str, &str)) {
-    info!("Load Test Mode: {} & {} & {}", mode.0, mode.1, mode.2);
-    match (mode.0, mode.1) {
-        ("client", "tcp") => {
-            info!("Tcp Client");
-            let target = CONFIG["load_test"]["target"].as_str().unwrap();
-            let target_addr = target.parse::<SocketAddr>().unwrap();
-            let size_config_integer = CONFIG["load_test"]["packet_size"].as_integer().unwrap();
-            let size_config = size_config_integer as usize;
-            let udp = tcp_client::TcpClient::new(target_addr, size_config);
-            udp.test_traffic_load(mode.2).unwrap();
+/// ロギングを初期化
+///
+/// ログレベルは以下の優先順位で決定される:
+/// 1. RUST_LOG 環境変数
+/// 2. --verbose フラグ（debug レベル）
+/// 3. デフォルト（info レベル）
+fn init_logging(verbose: bool) {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        if verbose {
+            EnvFilter::new("debug")
+        } else {
+            EnvFilter::new("warn,nelst=info")
         }
-        ("client", "udp") => {
-            info!("Udp Client");
+    });
+
+    tracing_subscriber::registry()
+        .with(fmt::layer().with_target(false).with_ansi(true))
+        .with(filter)
+        .init();
+}
+
+/// コマンドを実行
+fn run_command(cli: &Cli, output: &Output) -> Result<(), NelstError> {
+    // 設定ファイルを読み込み（オプション）
+    let _config = common::config::Config::load(cli.config.as_deref())?;
+
+    match &cli.command {
+        Commands::Load { command } => run_load_command(command, output),
+        Commands::Scan { command } => run_scan_command(command, output),
+        Commands::Server { command } => run_server_command(command, output),
+    }
+}
+
+/// 負荷テストコマンドを実行
+fn run_load_command(command: &cli::load::LoadCommands, output: &Output) -> Result<(), NelstError> {
+    use cli::load::LoadCommands;
+
+    let rt = tokio::runtime::Runtime::new()?;
+
+    match command {
+        LoadCommands::Traffic(args) => {
+            output.header("Network Load Test");
+            output.info("Target", &args.target.to_string());
+            output.info("Protocol", &format!("{:?}", args.protocol).to_lowercase());
+            output.info("Mode", &format!("{:?}", args.mode).to_lowercase());
+            output.info("Duration", &format!("{}s", args.duration));
+            output.info("Concurrency", &args.concurrency.to_string());
+            output.info("Packet Size", &format!("{} bytes", args.size));
+            output.newline();
+
+            info!("Starting traffic load test to {}", args.target);
+            let result = rt.block_on(load::traffic::run(args))?;
+
+            output.section("RESULTS");
+            let _ = output.result(&result);
+            Ok(())
         }
-        ("server", "tcp") => {
-            info!("Tcp Server");
-            let bind_config_str = CONFIG["load_test"]["target"].as_str().unwrap();
-            let bind_config = bind_config_str.parse().unwrap();
-            let size_config_integer = CONFIG["load_test"]["packet_size"].as_integer().unwrap();
-            let size_config = size_config_integer as usize;
-            let tcp = tcp_server::TcpServer::new(bind_config, size_config);
-            tcp.test_traffic_load().unwrap();
+        LoadCommands::Connection(args) => {
+            output.header("Connection Load Test");
+            output.info("Target", &args.target.to_string());
+            output.info("Count", &args.count.to_string());
+            output.info("Concurrency", &args.concurrency.to_string());
+            output.info("Timeout", &format!("{}ms", args.timeout));
+            output.newline();
+
+            info!("Starting connection load test to {}", args.target);
+            let result = rt.block_on(load::connection::run(args))?;
+
+            output.section("RESULTS");
+            let _ = output.result(&result);
+            Ok(())
         }
-        ("server", "udp") => {
-            info!("Udp Server");
+    }
+}
+
+/// スキャンコマンドを実行
+fn run_scan_command(command: &cli::scan::ScanCommands, output: &Output) -> Result<(), NelstError> {
+    use cli::scan::ScanCommands;
+
+    let rt = tokio::runtime::Runtime::new()?;
+
+    match command {
+        ScanCommands::Port(args) => {
+            output.header("Port Scanner");
+            output.info("Target", &args.target.to_string());
+            output.info("Method", &format!("{:?}", args.method));
+            output.info("Ports", &args.ports);
+            output.newline();
+
+            info!("Starting port scan on {}", args.target);
+            let result = rt.block_on(scan::tcp_connect::run(args))?;
+
+            output.section("OPEN PORTS");
+            let _ = output.result(&result);
+            Ok(())
         }
-        _ => error!("Errors in the configuration file"),
+    }
+}
+
+/// サーバコマンドを実行
+fn run_server_command(
+    command: &cli::server::ServerCommands,
+    output: &Output,
+) -> Result<(), NelstError> {
+    use cli::server::ServerCommands;
+
+    let rt = tokio::runtime::Runtime::new()?;
+
+    match command {
+        ServerCommands::Echo(args) => {
+            output.header("Echo Server");
+            output.info("Bind", &args.bind.to_string());
+            output.info("Protocol", &format!("{:?}", args.protocol).to_lowercase());
+            output.newline();
+            output.message("Press Ctrl+C to stop the server.");
+            output.newline();
+
+            info!("Starting echo server on {}", args.bind);
+            rt.block_on(server::echo::run(args))?;
+            Ok(())
+        }
+        ServerCommands::Sink(args) => {
+            output.header("Sink Server");
+            output.info("Bind", &args.bind.to_string());
+            output.info("Protocol", &format!("{:?}", args.protocol).to_lowercase());
+            output.newline();
+            output.message("Press Ctrl+C to stop the server.");
+            output.newline();
+
+            info!("Starting sink server on {}", args.bind);
+            rt.block_on(server::sink::run(args))?;
+            Ok(())
+        }
+        ServerCommands::Flood(args) => {
+            output.header("Flood Server");
+            output.info("Bind", &args.bind.to_string());
+            output.info("Protocol", &format!("{:?}", args.protocol).to_lowercase());
+            output.info("Size", &format!("{} bytes", args.size));
+            output.newline();
+            output.message("Press Ctrl+C to stop the server.");
+            output.newline();
+
+            info!("Starting flood server on {}", args.bind);
+            // TODO: フェーズ1で実装
+            todo!("Flood server not implemented yet")
+        }
     }
 }

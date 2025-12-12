@@ -1,14 +1,51 @@
 [package]
 name = "nelst"
 version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+edition = "2024"
+rust-version = "1.85"
+authors = ["NeLST Contributors"]
+description = "Network Load and Security Test - ネットワークの負荷テストとセキュリティテストを行うCLIツール"
+readme = "README.md"
+license = "MIT"
+keywords = ["network", "load-testing", "security", "port-scan", "benchmark"]
+categories = ["command-line-utilities", "network-programming"]
 
 [dependencies]
-log = "0.4"
-log4rs = "0.12.0"
-lazy_static = "1.4.0"
-toml = "0.5.6"
-tokio = { version = "1.14.0", features = ["full"] }
-mio = { version = "0.7", features = ["os-poll", "tcp"] }
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# 非同期ランタイム
+tokio = { version = "1", features = ["full"] }
+
+# 低レベルI/O
+mio = { version = "1", features = ["os-poll", "net"] }
+
+# シリアライズ
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# ロギング・トレーシング
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# エラーハンドリング
+anyhow = "1"
+thiserror = "1"
+
+# プログレス表示
+indicatif = "0.17"
+
+# 時間
+chrono = { version = "0.4", features = ["serde"] }
+
+# ディレクトリ
+dirs = "5"
+
+[dev-dependencies]
+# テスト用
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

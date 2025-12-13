@@ -229,6 +229,7 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
 
     #[test]
     fn test_default_config() {
@@ -242,5 +243,160 @@ mod tests {
     fn test_load_nonexistent_returns_default() {
         let config = Config::load(None).unwrap();
         assert_eq!(config.defaults.timeout, 5000);
+    }
+
+    #[test]
+    fn test_config_dir() {
+        let config_dir = Config::config_dir();
+        assert!(config_dir.is_some());
+        let path = config_dir.unwrap();
+        assert!(path.to_string_lossy().contains(".nelst"));
+    }
+
+    #[test]
+    fn test_profiles_dir() {
+        let profiles_dir = Config::profiles_dir();
+        assert!(profiles_dir.is_some());
+        let path = profiles_dir.unwrap();
+        assert!(path.to_string_lossy().contains("profiles"));
+    }
+
+    #[test]
+    fn test_load_from_explicit_path() {
+        // 存在しないパスを指定
+        let result = Config::load(Some("/nonexistent/path/config.toml"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_config_from_valid_toml() {
+        use std::io::Write;
+
+        let temp_dir = env::temp_dir().join(format!("nelst_config_test_{}", std::process::id()));
+        fs::create_dir_all(&temp_dir).unwrap();
+        let config_path = temp_dir.join("test_config.toml");
+
+        let config_content = r#"
+[defaults]
+verbose = true
+timeout = 10000
+
+[load]
+protocol = "udp"
+concurrency = 20
+duration = 120
+size = 2048
+
+[scan]
+method = "syn"
+ports = "1-65535"
+concurrency = 200
+timeout = 2000
+
+[server]
+bind = "127.0.0.1:9090"
+protocol = "udp"
+"#;
+
+        let mut file = fs::File::create(&config_path).unwrap();
+        file.write_all(config_content.as_bytes()).unwrap();
+
+        let config = Config::load(Some(config_path.to_str().unwrap())).unwrap();
+
+        assert!(config.defaults.verbose);
+        assert_eq!(config.defaults.timeout, 10000);
+        assert_eq!(config.load.protocol, "udp");
+        assert_eq!(config.load.concurrency, 20);
+        assert_eq!(config.scan.ports, "1-65535");
+        assert_eq!(config.server.bind, "127.0.0.1:9090");
+
+        // クリーンアップ
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_load_config_partial_toml() {
+        use std::io::Write;
+
+        let temp_dir = env::temp_dir().join(format!("nelst_config_partial_{}", std::process::id()));
+        fs::create_dir_all(&temp_dir).unwrap();
+        let config_path = temp_dir.join("partial_config.toml");
+
+        // 一部のセクションのみ指定
+        let config_content = r#"
+[defaults]
+timeout = 3000
+"#;
+
+        let mut file = fs::File::create(&config_path).unwrap();
+        file.write_all(config_content.as_bytes()).unwrap();
+
+        let config = Config::load(Some(config_path.to_str().unwrap())).unwrap();
+
+        // 指定した値
+        assert_eq!(config.defaults.timeout, 3000);
+        // デフォルト値が使用される
+        assert!(!config.defaults.verbose);
+        assert_eq!(config.load.protocol, "tcp");
+        assert_eq!(config.scan.ports, "1-1024");
+
+        // クリーンアップ
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_load_config_invalid_toml() {
+        use std::io::Write;
+
+        let temp_dir = env::temp_dir().join(format!("nelst_config_invalid_{}", std::process::id()));
+        fs::create_dir_all(&temp_dir).unwrap();
+        let config_path = temp_dir.join("invalid_config.toml");
+
+        // 不正なTOML
+        let config_content = r#"
+[defaults
+timeout = 5000
+"#;
+
+        let mut file = fs::File::create(&config_path).unwrap();
+        file.write_all(config_content.as_bytes()).unwrap();
+
+        let result = Config::load(Some(config_path.to_str().unwrap()));
+        assert!(result.is_err());
+
+        // クリーンアップ
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_defaults_config_default() {
+        let defaults = DefaultsConfig::default();
+        assert!(!defaults.verbose);
+        assert_eq!(defaults.timeout, 5000);
+    }
+
+    #[test]
+    fn test_load_config_default() {
+        let load = LoadConfig::default();
+        assert_eq!(load.protocol, "tcp");
+        assert_eq!(load.concurrency, 10);
+        assert_eq!(load.duration, 60);
+        assert_eq!(load.size, 1024);
+    }
+
+    #[test]
+    fn test_scan_config_default() {
+        let scan = ScanConfig::default();
+        assert_eq!(scan.method, "tcp");
+        assert_eq!(scan.ports, "1-1024");
+        assert_eq!(scan.concurrency, 100);
+        assert_eq!(scan.timeout, 1000);
+    }
+
+    #[test]
+    fn test_server_config_default() {
+        let server = ServerConfig::default();
+        assert_eq!(server.bind, "0.0.0.0:8080");
+        assert_eq!(server.protocol, "tcp");
     }
 }

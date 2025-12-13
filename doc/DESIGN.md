@@ -20,10 +20,13 @@ COMMANDS:
     help        ヘルプ表示
 
 GLOBAL OPTIONS:
-    --config <FILE>      設定ファイル指定
-    --profile <NAME>     プロファイル使用
-    --quiet              出力を最小限に
-    --json               JSON形式で出力
+    --config <FILE>         設定ファイル指定
+    --profile <NAME>        プロファイル使用
+    --save-profile <NAME>   現在の設定をプロファイルとして保存
+    --format <FORMAT>       出力形式 [json|csv|html|markdown|text]
+    --report <FILE>         結果をファイルに保存
+    --quiet                 出力を最小限に
+    --json                  JSON形式で出力
 ```
 
 ---
@@ -932,11 +935,11 @@ Hint: Verify the target is running and accessible.
 
 ---
 
-## 14. 実装状況（v0.4.0現在）
+## 14. 実装状況（v0.5.0現在）
 
 本設計書は最終目標を示しています。現在の実装状況については [PLAN.md](PLAN.md) を参照してください。
 
-### 実装済み（Phase 0-4）
+### 実装済み（Phase 0-5）
 
 | 機能カテゴリ | 状態 | 備考 |
 |-------------|------|------|
@@ -954,6 +957,9 @@ Hint: Verify the target is running and accessible.
 | MTU探索 | ✅ 完了 | Path MTU Discovery |
 | 帯域幅測定 | ✅ 完了 | Upload/Download/Both |
 | レイテンシ測定 | ✅ 完了 | ヒストグラム、異常値検出 |
+| プロファイル管理 | ✅ 完了 | `--save-profile`, `--profile` |
+| レポート機能 | ✅ 完了 | JSON/CSV/HTML/Markdown/Text |
+| 設定ファイル | ✅ 完了 | `--config`, `~/.nelst/config.toml` |
 
 ### 設計との差異
 
@@ -961,16 +967,16 @@ Hint: Verify the target is running and accessible.
 
 1. **SSL/TLS検査**: 独立サブコマンド（`scan ssl`）ではなく、`scan port --ssl-check` オプションとして統合
 2. **サービス検出**: 独立サブコマンド（`scan service`）ではなく、`scan port --service-detection --grab-banner` として統合
-3. **脆弱性チェック・グレード評価**: Phase 5に延期
-4. **スキャン結果比較（diff）**: Phase 5に延期
+3. **レポート機能**: `report` サブコマンドではなく、`--format` と `--report` グローバルオプションとして実装
 
-### 未実装（Phase 5）
+### 未実装（v0.6.0以降に予定）
 
-- プロファイル管理
-- レポート機能（HTML/CSV/Markdown）
-- 設定ファイル対応
 - SSL/TLS脆弱性チェック・グレード評価
 - スキャン結果比較（diff）
+- 統合テスト（CLIレベル）
+- ベンチマークテスト
+- crates.io公開
+- Docker イメージ
 
 ---
 

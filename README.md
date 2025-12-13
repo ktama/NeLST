@@ -2,6 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org/)
+[![CI](https://github.com/your-username/NeLST/workflows/CI/badge.svg)](https://github.com/your-username/NeLST/actions)
 
 ネットワークの負荷テストとセキュリティテストを行うCLIツール。
 
@@ -12,11 +13,12 @@
 - 🔍 **セキュリティスキャン**: ポートスキャン（TCP Connect, SYN, FIN, Xmas, NULL, UDP）
 - 🔐 **SSL/TLS検査**: 証明書情報取得、有効期限チェック、暗号スイート検査
 - 🏷️ **サービス検出**: バナー取得、サービス識別、バージョン検出
-- � **ネットワーク診断**: Ping（ICMP/TCP）、Traceroute、DNS解決、MTU探索
+- 📡 **ネットワーク診断**: Ping（ICMP/TCP）、Traceroute、DNS解決、MTU探索
 - 📈 **帯域幅測定**: 帯域幅測定、レイテンシ測定、ヒストグラム表示
-- �🖥️ **テストサーバ**: エコーサーバ、シンクサーバ、フラッドサーバ、HTTPサーバ
+- 🖥️ **テストサーバ**: エコーサーバ、シンクサーバ、フラッドサーバ、HTTPサーバ
 - 📊 **詳細な統計**: レイテンシ（P50/P95/P99）、スループット、成功率
-- 📁 **複数の出力形式**: テキスト、JSON、ファイル出力
+- 📁 **複数の出力形式**: テキスト、JSON、CSV、HTML、Markdown
+- 🗒️ **プロファイル管理**: 設定の保存・再利用、エクスポート/インポート
 
 ## インストール
 
@@ -51,10 +53,14 @@ COMMANDS:
     help        ヘルプ表示
 
 GLOBAL OPTIONS:
-    -v, --verbose        詳細ログを出力
-    -q, --quiet          出力を最小限に抑える
-        --json           JSON形式で出力
-        --config <FILE>  設定ファイルを指定
+    -v, --verbose           詳細ログを出力
+    -q, --quiet             出力を最小限に抑える
+        --json              JSON形式で出力
+        --config <FILE>     設定ファイルを指定
+        --profile <NAME>    プロファイルを使用
+        --save-profile <NAME>  現在の設定をプロファイルとして保存
+        --format <FORMAT>   出力形式 [json|csv|html|markdown|text]
+        --report <FILE>     結果をファイルに保存
 ```
 
 ### 負荷テスト
@@ -261,8 +267,56 @@ nelst bench latency -t 192.168.1.100:5201 -c 100
 # 継続時間指定で測定
 nelst bench latency -t 192.168.1.100:5201 -d 60
 
+# ヒストグラム表示
+nelst bench latency -t 192.168.1.100:5201 -d 60 --histogram
+
 # 詳細統計を出力
 nelst bench latency -t 192.168.1.100:5201 -c 1000 --json
+```
+
+### プロファイル管理
+
+よく使う設定をプロファイルとして保存・管理できます。
+
+```bash
+# 実行時にプロファイルとして保存
+nelst load traffic -t 192.168.1.100:8080 -c 50 -d 60 --save-profile prod-load-test
+
+# 保存したプロファイルを使用して実行
+nelst load traffic --profile prod-load-test
+
+# プロファイル一覧を表示
+nelst profile list
+
+# プロファイル詳細を表示
+nelst profile show my-scan
+
+# プロファイルを削除
+nelst profile delete old-profile
+
+# プロファイルをファイルにエクスポート
+nelst profile export my-scan -o my-scan.toml
+
+# ファイルからプロファイルをインポート
+nelst profile import shared-scan.toml --name imported-scan
+```
+
+### レポート出力
+
+テスト結果を複数のフォーマットで出力できます。
+
+```bash
+# HTML形式でレポートを保存
+nelst load http -u http://192.168.1.100:8080 --format html --report result.html
+
+# CSV形式で保存
+nelst scan port -t 192.168.1.100 --ports 1-1024 --format csv --report scan-result.csv
+
+# Markdown形式で保存
+nelst bench latency -t 192.168.1.100:5201 --format markdown --report latency.md
+
+# JSON形式（デフォルト）で保存
+nelst diag dns -t google.com --format json --report dns-result.json
 ```
 
 ## 設定ファイル
@@ -366,7 +420,10 @@ src/
 │   ├── mod.rs
 │   ├── load.rs       # 負荷テストコマンド
 │   ├── scan.rs       # スキャンコマンド
-│   └── server.rs     # サーバコマンド
+│   ├── diag.rs       # 診断コマンド
+│   ├── bench.rs      # ベンチマークコマンド
+│   ├── server.rs     # サーバコマンド
+│   └── profile.rs    # プロファイルコマンド
 ├── common/           # 共通モジュール
 │   ├── config.rs     # 設定管理
 │   ├── error.rs      # エラーハンドリング
@@ -383,11 +440,23 @@ src/
 │   ├── raw_socket.rs # Raw Socket基盤
 │   ├── service.rs    # サービス検出
 │   └── ssl.rs        # SSL/TLS検査
-└── server/           # サーバ実装
-    ├── echo.rs       # エコーサーバ
-    ├── sink.rs       # シンクサーバ
-    ├── flood.rs      # フラッドサーバ
-    └── http.rs       # HTTPサーバ
+├── diag/             # ネットワーク診断
+│   ├── ping.rs       # Ping
+│   ├── trace.rs      # Traceroute
+│   ├── dns.rs        # DNS解決
+│   └── mtu.rs        # MTU探索
+├── bench/            # ベンチマーク
+│   ├── bandwidth.rs  # 帯域幅測定
+│   └── latency.rs    # レイテンシ測定
+├── server/           # サーバ実装
+│   ├── echo.rs       # エコーサーバ
+│   ├── sink.rs       # シンクサーバ
+│   ├── flood.rs      # フラッドサーバ
+│   └── http.rs       # HTTPサーバ
+├── report/           # レポート機能
+│   └── formatter.rs  # 出力フォーマッタ
+└── profile/          # プロファイル管理
+    └── manager.rs    # プロファイルマネージャ
 ```
 
 ## ライセンス
@@ -415,8 +484,17 @@ Issue や Pull Request を歓迎します。
   - UDPスキャン
   - サービス検出・バナー取得
   - SSL/TLS検査（証明書・暗号スイート）
-- [ ] 診断機能（ping/traceroute/DNS）（v0.4.0）
-- [ ] レポート機能、プロファイル管理（v0.5.0)
+- [x] 診断機能（v0.4.0）
+  - Ping（ICMP/TCP）
+  - Traceroute（UDP/TCP/ICMP）
+  - DNS解決（全レコードタイプ）
+  - MTU探索
+  - 帯域幅・レイテンシ測定
+- [x] 運用機能（v0.5.0）
+  - プロファイル管理
+  - レポート機能（HTML/CSV/Markdown）
+  - 設定ファイル対応
+  - CI/CD（GitHub Actions）
 
 詳細は [doc/DESIGN.md](doc/DESIGN.md) および [doc/PLAN.md](doc/PLAN.md) を参照してください。
 

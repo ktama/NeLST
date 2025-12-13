@@ -40,6 +40,11 @@ impl Output {
         self.format
     }
 
+    /// JSON出力モードかどうか
+    pub fn is_json(&self) -> bool {
+        self.format == OutputFormat::Json
+    }
+
     /// ヘッダーを出力（テキストモードのみ）
     pub fn header(&self, title: &str) {
         if self.format != OutputFormat::Text {

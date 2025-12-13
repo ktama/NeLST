@@ -26,6 +26,8 @@ mod cli;
 mod common;
 mod diag;
 mod load;
+mod profile;
+mod report;
 mod scan;
 mod server;
 
@@ -33,12 +35,14 @@ use clap::Parser;
 use serde::Serialize;
 use std::fs;
 use std::process::ExitCode;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 use cli::{Cli, Commands};
 use common::error::{ExitStatus, NelstError, format_error};
 use common::output::Output;
+use profile::{Profile, ProfileManager};
+use report::ReportFormat;
 
 fn main() -> ExitCode {
     // CLIをパース
@@ -98,22 +102,339 @@ fn save_result_to_file<T: Serialize>(result: &T, path: &str) -> Result<(), Nelst
     Ok(())
 }
 
+/// 結果を指定形式でファイルに保存
+fn save_result_with_format<T: Serialize>(
+    result: &T,
+    path: &str,
+    format: &ReportFormat,
+) -> Result<(), NelstError> {
+    let content = match format {
+        ReportFormat::Json => serde_json::to_string_pretty(result)
+            .map_err(|e| NelstError::config(format!("Failed to serialize to JSON: {}", e)))?,
+        ReportFormat::Csv => {
+            // CSVはテーブルデータ向けなので、JSONにフォールバック
+            warn!("CSV format not suitable for this data, using JSON");
+            serde_json::to_string_pretty(result)
+                .map_err(|e| NelstError::config(format!("Failed to serialize: {}", e)))?
+        }
+        ReportFormat::Html => {
+            let json = serde_json::to_string_pretty(result)
+                .map_err(|e| NelstError::config(format!("Failed to serialize: {}", e)))?;
+            format!(
+                r#"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>NeLST Report</title>
+    <style>
+        body {{ font-family: sans-serif; margin: 2em; }}
+        pre {{ background: #f4f4f4; padding: 1em; overflow-x: auto; }}
+    </style>
+</head>
+<body>
+    <h1>NeLST Report</h1>
+    <p>Generated: {}</p>
+    <pre>{}</pre>
+</body>
+</html>"#,
+                chrono::Utc::now().to_rfc3339(),
+                json
+            )
+        }
+        ReportFormat::Markdown => {
+            let json = serde_json::to_string_pretty(result)
+                .map_err(|e| NelstError::config(format!("Failed to serialize: {}", e)))?;
+            format!(
+                "# NeLST Report\n\n**Generated:** {}\n\n```json\n{}\n```\n",
+                chrono::Utc::now().to_rfc3339(),
+                json
+            )
+        }
+        ReportFormat::Text => serde_json::to_string_pretty(result)
+            .map_err(|e| NelstError::config(format!("Failed to serialize: {}", e)))?,
+    };
+
+    fs::write(path, content)
+        .map_err(|e| NelstError::config(format!("Failed to write to file '{}': {}", path, e)))?;
+    info!("Report saved to {} (format: {:?})", path, format);
+    Ok(())
+}
+
+/// プロファイルから設定を読み込み、現在のオプションにマージする情報を表示
+fn load_profile_info(profile_name: &str, output: &Output) -> Result<Profile, NelstError> {
+    let manager = ProfileManager::new()?;
+    let profile = manager.load(profile_name)?;
+    output.message(&format!("Using profile: {}", profile.name));
+    Ok(profile)
+}
+
+/// 現在のコマンドオプションをプロファイルとして保存
+fn save_command_as_profile(
+    cli: &Cli,
+    profile_name: &str,
+    output: &Output,
+) -> Result<(), NelstError> {
+    let manager = ProfileManager::new()?;
+
+    let (command_type, subcommand_type, options) = match &cli.command {
+        Commands::Load { command } => {
+            let (sub, opts) = extract_load_options(command);
+            ("load".to_string(), sub, opts)
+        }
+        Commands::Scan { command } => {
+            let (sub, opts) = extract_scan_options(command);
+            ("scan".to_string(), sub, opts)
+        }
+        Commands::Diag { command } => {
+            let (sub, opts) = extract_diag_options(command);
+            ("diag".to_string(), sub, opts)
+        }
+        Commands::Bench { command } => {
+            let (sub, opts) = extract_bench_options(command);
+            ("bench".to_string(), sub, opts)
+        }
+        Commands::Server { command } => {
+            let (sub, opts) = extract_server_options(command);
+            ("server".to_string(), sub, opts)
+        }
+        Commands::Profile { .. } => {
+            return Err(NelstError::config(
+                "Cannot save profile command as a profile",
+            ));
+        }
+    };
+
+    let mut profile = Profile::new(profile_name, &command_type, &subcommand_type, None);
+    profile.options = options;
+
+    manager.save(&profile)?;
+    output.success(&format!("Profile '{}' saved.", profile_name));
+    Ok(())
+}
+
+/// Loadコマンドのオプションを抽出
+fn extract_load_options(
+    command: &cli::load::LoadCommands,
+) -> (String, std::collections::HashMap<String, serde_json::Value>) {
+    use cli::load::LoadCommands;
+    let mut opts = std::collections::HashMap::new();
+
+    match command {
+        LoadCommands::Traffic(args) => {
+            opts.insert(
+                "target".to_string(),
+                serde_json::json!(args.target.to_string()),
+            );
+            opts.insert("duration".to_string(), serde_json::json!(args.duration));
+            opts.insert(
+                "concurrency".to_string(),
+                serde_json::json!(args.concurrency),
+            );
+            opts.insert("size".to_string(), serde_json::json!(args.size));
+            ("traffic".to_string(), opts)
+        }
+        LoadCommands::Connection(args) => {
+            opts.insert(
+                "target".to_string(),
+                serde_json::json!(args.target.to_string()),
+            );
+            opts.insert("count".to_string(), serde_json::json!(args.count));
+            opts.insert(
+                "concurrency".to_string(),
+                serde_json::json!(args.concurrency),
+            );
+            opts.insert("timeout".to_string(), serde_json::json!(args.timeout));
+            ("connection".to_string(), opts)
+        }
+        LoadCommands::Http(args) => {
+            opts.insert("url".to_string(), serde_json::json!(args.url));
+            opts.insert("method".to_string(), serde_json::json!(args.method));
+            opts.insert("duration".to_string(), serde_json::json!(args.duration));
+            opts.insert(
+                "concurrency".to_string(),
+                serde_json::json!(args.concurrency),
+            );
+            ("http".to_string(), opts)
+        }
+    }
+}
+
+/// Scanコマンドのオプションを抽出
+fn extract_scan_options(
+    command: &cli::scan::ScanCommands,
+) -> (String, std::collections::HashMap<String, serde_json::Value>) {
+    use cli::scan::ScanCommands;
+    let mut opts = std::collections::HashMap::new();
+
+    match command {
+        ScanCommands::Port(args) => {
+            opts.insert(
+                "target".to_string(),
+                serde_json::json!(args.target.to_string()),
+            );
+            opts.insert("ports".to_string(), serde_json::json!(args.ports));
+            opts.insert(
+                "concurrency".to_string(),
+                serde_json::json!(args.concurrency),
+            );
+            opts.insert("timeout".to_string(), serde_json::json!(args.timeout));
+            ("port".to_string(), opts)
+        }
+    }
+}
+
+/// Diagコマンドのオプションを抽出
+fn extract_diag_options(
+    command: &cli::diag::DiagCommands,
+) -> (String, std::collections::HashMap<String, serde_json::Value>) {
+    use cli::diag::DiagCommands;
+    let mut opts = std::collections::HashMap::new();
+
+    match command {
+        DiagCommands::Ping(args) => {
+            opts.insert("target".to_string(), serde_json::json!(args.target));
+            opts.insert("count".to_string(), serde_json::json!(args.count));
+            opts.insert("interval".to_string(), serde_json::json!(args.interval));
+            ("ping".to_string(), opts)
+        }
+        DiagCommands::Trace(args) => {
+            opts.insert("target".to_string(), serde_json::json!(args.target));
+            opts.insert("max_hops".to_string(), serde_json::json!(args.max_hops));
+            ("trace".to_string(), opts)
+        }
+        DiagCommands::Dns(args) => {
+            opts.insert("target".to_string(), serde_json::json!(args.target));
+            opts.insert(
+                "record_type".to_string(),
+                serde_json::json!(format!("{:?}", args.record_type)),
+            );
+            ("dns".to_string(), opts)
+        }
+        DiagCommands::Mtu(args) => {
+            opts.insert("target".to_string(), serde_json::json!(args.target));
+            ("mtu".to_string(), opts)
+        }
+    }
+}
+
+/// Benchコマンドのオプションを抽出
+fn extract_bench_options(
+    command: &cli::bench::BenchCommands,
+) -> (String, std::collections::HashMap<String, serde_json::Value>) {
+    use cli::bench::BenchCommands;
+    let mut opts = std::collections::HashMap::new();
+
+    match command {
+        BenchCommands::Bandwidth(args) => {
+            if let Some(ref target) = args.target {
+                opts.insert("target".to_string(), serde_json::json!(target.to_string()));
+            }
+            opts.insert("bind".to_string(), serde_json::json!(args.bind.to_string()));
+            opts.insert("duration".to_string(), serde_json::json!(args.duration));
+            ("bandwidth".to_string(), opts)
+        }
+        BenchCommands::Latency(args) => {
+            opts.insert(
+                "target".to_string(),
+                serde_json::json!(args.target.to_string()),
+            );
+            opts.insert("duration".to_string(), serde_json::json!(args.duration));
+            opts.insert("interval".to_string(), serde_json::json!(args.interval));
+            ("latency".to_string(), opts)
+        }
+    }
+}
+
+/// Serverコマンドのオプションを抽出
+fn extract_server_options(
+    command: &cli::server::ServerCommands,
+) -> (String, std::collections::HashMap<String, serde_json::Value>) {
+    use cli::server::ServerCommands;
+    let mut opts = std::collections::HashMap::new();
+
+    match command {
+        ServerCommands::Echo(args) => {
+            opts.insert("bind".to_string(), serde_json::json!(args.bind.to_string()));
+            ("echo".to_string(), opts)
+        }
+        ServerCommands::Sink(args) => {
+            opts.insert("bind".to_string(), serde_json::json!(args.bind.to_string()));
+            ("sink".to_string(), opts)
+        }
+        ServerCommands::Flood(args) => {
+            opts.insert("bind".to_string(), serde_json::json!(args.bind.to_string()));
+            opts.insert("size".to_string(), serde_json::json!(args.size));
+            ("flood".to_string(), opts)
+        }
+        ServerCommands::Http(args) => {
+            opts.insert("bind".to_string(), serde_json::json!(args.bind.to_string()));
+            ("http".to_string(), opts)
+        }
+    }
+}
+
 /// コマンドを実行
 fn run_command(cli: &Cli, output: &Output) -> Result<(), NelstError> {
     // 設定ファイルを読み込み（オプション）
     let _config = common::config::Config::load(cli.config.as_deref())?;
 
-    match &cli.command {
-        Commands::Load { command } => run_load_command(command, output),
-        Commands::Scan { command } => run_scan_command(command, output),
-        Commands::Server { command } => run_server_command(command, output),
-        Commands::Diag { command } => run_diag_command(command, output),
-        Commands::Bench { command } => run_bench_command(command, output),
+    // プロファイルが指定されている場合は情報を表示
+    if let Some(ref profile_name) = cli.profile {
+        let _profile = load_profile_info(profile_name, output)?;
+        // TODO: プロファイルのオプションをマージする機能は将来実装
     }
+
+    // コマンドを実行
+    let result = match &cli.command {
+        Commands::Load { command } => run_load_command(command, output, cli),
+        Commands::Scan { command } => run_scan_command(command, output, cli),
+        Commands::Server { command } => run_server_command(command, output),
+        Commands::Diag { command } => run_diag_command(command, output, cli),
+        Commands::Bench { command } => run_bench_command(command, output, cli),
+        Commands::Profile { command } => run_profile_command(command, output),
+    };
+
+    // プロファイル保存が指定されている場合
+    if let Some(ref profile_name) = cli.save_profile {
+        save_command_as_profile(cli, profile_name, output)?;
+    }
+
+    result
+}
+
+/// 結果をレポートとして保存（--report と --format オプション対応）
+fn save_report_if_requested<T: Serialize>(
+    result: &T,
+    cli: &Cli,
+    output: &Output,
+) -> Result<(), NelstError> {
+    if let Some(ref report_path) = cli.report {
+        let format = if let Some(ref fmt) = cli.format {
+            ReportFormat::from_str(fmt)?
+        } else {
+            // 拡張子から推測
+            if report_path.ends_with(".html") {
+                ReportFormat::Html
+            } else if report_path.ends_with(".md") {
+                ReportFormat::Markdown
+            } else if report_path.ends_with(".csv") {
+                ReportFormat::Csv
+            } else {
+                ReportFormat::Json
+            }
+        };
+        save_result_with_format(result, report_path, &format)?;
+        output.success(&format!("Report saved to {}", report_path));
+    }
+    Ok(())
 }
 
 /// 負荷テストコマンドを実行
-fn run_load_command(command: &cli::load::LoadCommands, output: &Output) -> Result<(), NelstError> {
+fn run_load_command(
+    command: &cli::load::LoadCommands,
+    output: &Output,
+    cli: &Cli,
+) -> Result<(), NelstError> {
     use cli::load::LoadCommands;
 
     let rt = tokio::runtime::Runtime::new()?;
@@ -139,6 +460,9 @@ fn run_load_command(command: &cli::load::LoadCommands, output: &Output) -> Resul
             if let Some(ref path) = args.output {
                 save_result_to_file(&result, path)?;
             }
+
+            // レポート出力
+            save_report_if_requested(&result, cli, output)?;
             Ok(())
         }
         LoadCommands::Connection(args) => {
@@ -159,6 +483,9 @@ fn run_load_command(command: &cli::load::LoadCommands, output: &Output) -> Resul
             if let Some(ref path) = args.output {
                 save_result_to_file(&result, path)?;
             }
+
+            // レポート出力
+            save_report_if_requested(&result, cli, output)?;
             Ok(())
         }
         LoadCommands::Http(args) => {
@@ -194,13 +521,20 @@ fn run_load_command(command: &cli::load::LoadCommands, output: &Output) -> Resul
             if let Some(ref path) = args.output {
                 save_result_to_file(&result, path)?;
             }
+
+            // レポート出力
+            save_report_if_requested(&result, cli, output)?;
             Ok(())
         }
     }
 }
 
 /// スキャンコマンドを実行
-fn run_scan_command(command: &cli::scan::ScanCommands, output: &Output) -> Result<(), NelstError> {
+fn run_scan_command(
+    command: &cli::scan::ScanCommands,
+    output: &Output,
+    cli: &Cli,
+) -> Result<(), NelstError> {
     use cli::scan::{ScanCommands, ScanMethod};
 
     let rt = tokio::runtime::Runtime::new()?;
@@ -334,6 +668,9 @@ fn run_scan_command(command: &cli::scan::ScanCommands, output: &Output) -> Resul
             if let Some(ref path) = args.output {
                 save_result_to_file(&result, path)?;
             }
+
+            // レポート出力
+            save_report_if_requested(&result, cli, output)?;
             Ok(())
         }
     }
@@ -413,7 +750,11 @@ fn run_server_command(
 }
 
 /// 診断コマンドを実行
-fn run_diag_command(command: &cli::diag::DiagCommands, output: &Output) -> Result<(), NelstError> {
+fn run_diag_command(
+    command: &cli::diag::DiagCommands,
+    output: &Output,
+    cli: &Cli,
+) -> Result<(), NelstError> {
     use cli::diag::DiagCommands;
 
     let rt = tokio::runtime::Runtime::new()?;
@@ -449,6 +790,7 @@ fn run_diag_command(command: &cli::diag::DiagCommands, output: &Output) -> Resul
             if let Some(ref path) = args.output {
                 save_result_to_file(&result, path)?;
             }
+            save_report_if_requested(&result, cli, output)?;
             Ok(())
         }
         DiagCommands::Trace(args) => {
@@ -492,6 +834,7 @@ fn run_diag_command(command: &cli::diag::DiagCommands, output: &Output) -> Resul
             if let Some(ref path) = args.output {
                 save_result_to_file(&result, path)?;
             }
+            save_report_if_requested(&result, cli, output)?;
             Ok(())
         }
         DiagCommands::Dns(args) => {
@@ -528,6 +871,7 @@ fn run_diag_command(command: &cli::diag::DiagCommands, output: &Output) -> Resul
             if let Some(ref path) = args.output {
                 save_result_to_file(&result, path)?;
             }
+            save_report_if_requested(&result, cli, output)?;
             Ok(())
         }
         DiagCommands::Mtu(args) => {
@@ -553,6 +897,7 @@ fn run_diag_command(command: &cli::diag::DiagCommands, output: &Output) -> Resul
             if let Some(ref path) = args.output {
                 save_result_to_file(&result, path)?;
             }
+            save_report_if_requested(&result, cli, output)?;
             Ok(())
         }
     }
@@ -562,6 +907,7 @@ fn run_diag_command(command: &cli::diag::DiagCommands, output: &Output) -> Resul
 fn run_bench_command(
     command: &cli::bench::BenchCommands,
     output: &Output,
+    cli: &Cli,
 ) -> Result<(), NelstError> {
     use cli::bench::BenchCommands;
 
@@ -614,6 +960,7 @@ fn run_bench_command(
                 if let Some(ref path) = args.output {
                     save_result_to_file(&result, path)?;
                 }
+                save_report_if_requested(&result, cli, output)?;
             }
             Ok(())
         }
@@ -664,6 +1011,103 @@ fn run_bench_command(
             if let Some(ref path) = args.output {
                 save_result_to_file(&result, path)?;
             }
+            save_report_if_requested(&result, cli, output)?;
+            Ok(())
+        }
+    }
+}
+
+/// プロファイル管理コマンドを実行
+fn run_profile_command(
+    command: &cli::profile::ProfileCommands,
+    output: &Output,
+) -> Result<(), NelstError> {
+    use cli::profile::ProfileCommands;
+    use profile::ProfileManager;
+
+    let manager = ProfileManager::new()?;
+
+    match command {
+        ProfileCommands::List => {
+            output.header("Saved Profiles");
+
+            let profiles = manager.list()?;
+            if profiles.is_empty() {
+                output.message("No profiles saved.");
+                output.message("");
+                output.message("To save a profile, use --save-profile option with any command.");
+            } else {
+                output.newline();
+                for p in &profiles {
+                    output.info(
+                        &p.name,
+                        &format!(
+                            "{} {} - {}",
+                            p.command_type, p.subcommand_type, p.description
+                        ),
+                    );
+                }
+                output.newline();
+                output.message(&format!("Total: {} profile(s)", profiles.len()));
+            }
+
+            if output.is_json() {
+                output.json(&profiles)?;
+            }
+            Ok(())
+        }
+        ProfileCommands::Show(args) => {
+            let profile = manager.load(&args.name)?;
+
+            output.header(&format!("Profile: {}", profile.name));
+            output.info(
+                "Type",
+                &format!("{} {}", profile.command_type, profile.subcommand_type),
+            );
+            output.info("Description", &profile.description);
+            output.info("Created", &profile.created_at);
+            output.info("Updated", &profile.updated_at);
+            output.newline();
+
+            output.section("OPTIONS");
+            for (key, value) in &profile.options {
+                output.info(key, &value.to_string());
+            }
+
+            output.json(&profile)?;
+            Ok(())
+        }
+        ProfileCommands::Delete(args) => {
+            if !manager.exists(&args.name) {
+                return Err(NelstError::config(format!(
+                    "Profile '{}' not found",
+                    args.name
+                )));
+            }
+
+            manager.delete(&args.name)?;
+            output.success(&format!("Profile '{}' deleted.", args.name));
+            Ok(())
+        }
+        ProfileCommands::Export(args) => {
+            let output_path = args
+                .output
+                .clone()
+                .unwrap_or_else(|| format!("{}.toml", args.name));
+
+            manager.export(&args.name, &output_path)?;
+            output.success(&format!(
+                "Profile '{}' exported to '{}'",
+                args.name, output_path
+            ));
+            Ok(())
+        }
+        ProfileCommands::Import(args) => {
+            let profile = manager.import(&args.file, args.name.as_deref())?;
+            output.success(&format!(
+                "Profile '{}' imported successfully.",
+                profile.name
+            ));
             Ok(())
         }
     }

@@ -35,7 +35,8 @@ cargo build --release
 ### 必要要件
 
 - Rust 1.85以上（Edition 2024）
-- Linux / macOS / Windows
+- Linux / macOS（推奨）
+- Windows：基本機能は動作しますが、Raw Socket機能（SYN/FIN/Xmas/NULLスキャン）にはWinPcap/Npcapが必要です
 
 ## 使用方法
 

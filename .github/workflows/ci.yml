@@ -17,11 +17,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
         rust: [stable, beta]
-        exclude:
-          - os: windows-latest
-            rust: beta
 
     steps:
       - name: Checkout
@@ -115,9 +112,8 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact: nelst
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact: nelst.exe
+          # Windows is excluded due to pnet crate requiring WinPcap/Npcap
+          # Raw socket features (SYN/FIN/Xmas/NULL scans) require admin privileges
 
     steps:
       - name: Checkout

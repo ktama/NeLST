@@ -6,6 +6,8 @@
 
 use clap::{Parser, Subcommand};
 
+pub mod bench;
+pub mod diag;
 pub mod load;
 pub mod scan;
 pub mod server;
@@ -57,6 +59,18 @@ pub enum Commands {
     Server {
         #[command(subcommand)]
         command: server::ServerCommands,
+    },
+
+    /// ネットワーク診断（ping/traceroute/DNS）
+    Diag {
+        #[command(subcommand)]
+        command: diag::DiagCommands,
+    },
+
+    /// 帯域幅・レイテンシ測定
+    Bench {
+        #[command(subcommand)]
+        command: bench::BenchCommands,
     },
 }
 

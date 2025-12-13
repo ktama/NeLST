@@ -307,24 +307,24 @@ tokio-rustls = { version = "0.26", features = ["ring"] }
 
 ---
 
-## フェーズ 4: 診断・測定機能（v0.4.0）
+## フェーズ 4: 診断・測定機能（v0.4.0） ✅ 完了
 
 ネットワーク診断と帯域測定。
 
 ### 4.0 Phase 2-3 からの延期項目
 
-以下の項目はPhase 2-3で延期され、Phase 4で対応予定：
+以下の項目はPhase 2-3で延期され、Phase 5で対応予定：
 
-- [ ] ヒストグラム表示（`src/common/stats.rs`）
-- [ ] リアルタイム統計更新
-- [ ] バッチモード（`--batch <FILE>`）
-- [ ] ICMP Port Unreachable検出（UDP scan）
-- [ ] サービスデータベース（JSON/TOML）
-- [ ] SSL/TLS 既知脆弱性チェック（POODLE, BEAST等）
-- [ ] SSL/TLS グレード評価
-- [ ] スキャン結果比較（`--diff <FILE>`）
+- [x] ヒストグラム表示（`src/bench/latency.rs`）
+- [ ] リアルタイム統計更新（延期: Phase 5）
+- [ ] バッチモード（`--batch <FILE>`）（延期: Phase 5）
+- [ ] ICMP Port Unreachable検出（UDP scan）（延期: Phase 5）
+- [ ] サービスデータベース（JSON/TOML）（延期: Phase 5）
+- [ ] SSL/TLS 既知脆弱性チェック（POODLE, BEAST等）（延期: Phase 5）
+- [ ] SSL/TLS グレード評価（延期: Phase 5）
+- [ ] スキャン結果比較（`--diff <FILE>`）（延期: Phase 5）
 
-### 4.1 Ping
+### 4.1 Ping ✅
 
 **ファイル**: `src/diag/ping.rs`
 
@@ -333,57 +333,75 @@ tokio-rustls = { version = "0.26", features = ["ring"] }
 surge-ping = "0.8"
 ```
 
-- [ ] ICMP Echo Request/Reply
-- [ ] TCP ping（ICMP不可時の代替）
-- [ ] 統計表示（min/max/avg/stddev）
+- [x] ICMP Echo Request/Reply
+- [x] TCP ping（ICMP不可時の代替）
+- [x] 統計表示（min/max/avg/stddev）
+- [x] JSON出力対応
 
-### 4.2 Traceroute
+### 4.2 Traceroute ✅
 
 **ファイル**: `src/diag/trace.rs`
 
-- [ ] TTL増加によるホップ検出
-- [ ] UDP/TCP/ICMPモード
-- [ ] ホップごとのレイテンシ表示
+- [x] TTL増加によるホップ検出
+- [x] UDP/TCP/ICMPモード
+- [x] ホップごとのレイテンシ表示
+- [x] JSON出力対応
 
-### 4.3 DNS解決
+### 4.3 DNS解決 ✅
 
 **ファイル**: `src/diag/dns.rs`
 
 **依存追加**:
 ```toml
-trust-dns-resolver = "0.23"
+hickory-resolver = "0.25"  # 旧trust-dns-resolver
 ```
 
-- [ ] A/AAAA/MX/TXT/NS/CNAME レコード
-- [ ] カスタムDNSサーバ指定
-- [ ] TCP/UDP切り替え
-- [ ] 解決時間測定
+- [x] A/AAAA/MX/TXT/NS/CNAME/SOA/PTR レコード
+- [x] カスタムDNSサーバ指定
+- [x] TCP/UDP切り替え
+- [x] 解決時間測定
+- [x] JSON出力対応
 
-### 4.4 MTU探索
+### 4.4 MTU探索 ✅
 
 **ファイル**: `src/diag/mtu.rs`
 
-- [ ] Path MTU Discovery
-- [ ] DF（Don't Fragment）フラグ設定
-- [ ] 二分探索による最適MTU検出
+- [x] Path MTU Discovery
+- [x] DF（Don't Fragment）フラグ設定（Linux）
+- [x] 二分探索による最適MTU検出
+- [x] JSON出力対応
 
-### 4.5 帯域幅測定
+### 4.5 帯域幅測定 ✅
 
 **ファイル**: `src/bench/bandwidth.rs`
 
-- [ ] 帯域測定サーバ
-- [ ] 帯域測定クライアント
-- [ ] Upload/Download測定
-- [ ] 並列ストリーム
-- [ ] ジッター計算
+- [x] 帯域測定サーバ
+- [x] 帯域測定クライアント
+- [x] Upload/Download/Both測定
+- [x] 並列ストリーム対応
+- [x] JSON出力対応
+- [ ] ジッター計算（延期: Phase 5）
 
-### 4.6 レイテンシ測定
+### 4.6 レイテンシ測定 ✅
 
 **ファイル**: `src/bench/latency.rs`
 
-- [ ] 継続的なレイテンシ測定
-- [ ] ヒストグラム表示
-- [ ] 異常値検出
+- [x] 継続的なレイテンシ測定
+- [x] ヒストグラム表示
+- [x] 異常値検出（IQR法）
+- [x] JSON出力対応
+
+### 4.7 テストカバレッジ ✅
+
+- [x] diag/ping.rs: 9テスト
+- [x] diag/trace.rs: 7テスト
+- [x] diag/dns.rs: 13テスト
+- [x] diag/mtu.rs: 10テスト
+- [x] bench/bandwidth.rs: 5テスト
+- [x] bench/latency.rs: 17テスト
+- [x] cli/diag.rs: 15テスト
+- [x] cli/bench.rs: 11テスト
+- [x] 全154テストがパス
 
 ---
 
@@ -538,4 +556,5 @@ graph TD
 5. [x] フェーズ1 MVPの実装
 6. [x] フェーズ2 コア機能の実装
 7. [x] フェーズ3 セキュリティ機能の実装
-8. [ ] フェーズ4 診断・測定機能を開始
+8. [x] フェーズ4 診断・測定機能の実装
+9. [ ] フェーズ5 運用機能・安定化を開始

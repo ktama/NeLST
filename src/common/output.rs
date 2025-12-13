@@ -109,6 +109,22 @@ impl Output {
         eprintln!("Error: {}", msg);
     }
 
+    /// 成功メッセージを出力（テキストモードのみ）
+    pub fn success(&self, msg: &str) {
+        if self.format != OutputFormat::Text {
+            return;
+        }
+        println!("✓ {}", msg);
+    }
+
+    /// 警告メッセージを出力（テキストモードのみ）
+    pub fn warning(&self, msg: &str) {
+        if self.format != OutputFormat::Text {
+            return;
+        }
+        println!("⚠ {}", msg);
+    }
+
     /// エラーとヒントを出力
     pub fn error_with_hint(&self, msg: &str, hint: &str) {
         eprintln!("Error: {}", msg);

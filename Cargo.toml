@@ -70,6 +70,12 @@ tokio-rustls = { version = "0.26", features = ["ring"] }
 # システム
 libc = "0.2"
 
+# ICMP Ping
+surge-ping = "0.8"
+
+# DNS解決
+hickory-resolver = "0.25"
+
 [dev-dependencies]
 # テスト用
 

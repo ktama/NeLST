@@ -458,9 +458,48 @@ nelst diag dns [OPTIONS]
 
 OPTIONS:
     -t, --target <DOMAIN>        対象ドメイン (必須)
-    --type <TYPE>                レコードタイプ [A|AAAA|MX|TXT|NS|CNAME|ALL]
-    --server <IP>                DNSサーバ指定
+    --record-type <TYPE>         レコードタイプ [a|aaaa|mx|txt|ns|cname|soa|ptr|all]
+    -s, --server <IP>            DNSサーバ指定
     --tcp                        TCP経由で問い合わせ
+    --timeout <MS>               タイムアウト [default: 5000]
+```
+
+#### 使用例
+
+```bash
+# Aレコードを検索
+nelst diag dns -t google.com
+
+# MXレコードを検索
+nelst diag dns -t google.com --record-type mx
+
+# すべてのレコードを取得
+nelst diag dns -t google.com --record-type all
+
+# 特定のDNSサーバを使用
+nelst diag dns -t google.com -s 8.8.8.8
+```
+
+### 4.4 MTU探索 (`diag mtu`)
+
+```bash
+nelst diag mtu [OPTIONS]
+
+OPTIONS:
+    -t, --target <HOST>          ターゲット (必須)
+    --min-mtu <BYTES>            最小MTU [default: 576]
+    --max-mtu <BYTES>            最大MTU [default: 1500]
+    --timeout <MS>               タイムアウト [default: 1000]
+```
+
+#### 使用例
+
+```bash
+# Path MTU探索
+sudo nelst diag mtu -t google.com
+
+# 探索範囲を指定
+sudo nelst diag mtu -t 192.168.1.1 --min-mtu 576 --max-mtu 9000
 ```
 
 ---
@@ -534,9 +573,25 @@ nelst bench latency [OPTIONS]
 
 OPTIONS:
     -t, --target <HOST:PORT>     ターゲット (必須)
+    -c, --count <NUM>            測定回数 [default: 100]
     -d, --duration <SECONDS>     測定時間 [default: 60]
     -i, --interval <MS>          測定間隔 [default: 100]
     --histogram                  ヒストグラム表示
+    --server                     サーバモードで起動
+    -b, --bind <HOST:PORT>       バインドアドレス [default: 0.0.0.0:5201]
+```
+
+#### 使用例
+
+```bash
+# サーバ側
+nelst bench latency --server -b 0.0.0.0:5201
+
+# クライアント側（100回測定）
+nelst bench latency -t 192.168.1.100:5201 -c 100
+
+# ヒストグラム付きで測定
+nelst bench latency -t 192.168.1.100:5201 -d 30 --histogram
 ```
 
 ---
@@ -877,11 +932,11 @@ Hint: Verify the target is running and accessible.
 
 ---
 
-## 14. 実装状況（v0.3.0現在）
+## 14. 実装状況（v0.4.0現在）
 
 本設計書は最終目標を示しています。現在の実装状況については [PLAN.md](PLAN.md) を参照してください。
 
-### 実装済み（Phase 0-3）
+### 実装済み（Phase 0-4）
 
 | 機能カテゴリ | 状態 | 備考 |
 |-------------|------|------|
@@ -893,6 +948,12 @@ Hint: Verify the target is running and accessible.
 | サービス検出 | ✅ 完了 | `--grab-banner`, `--service-detection` |
 | SSL/TLS検査 | ✅ 完了 | `--ssl-check` オプション |
 | 統計・出力 | ✅ 完了 | JSON出力、ファイル出力 |
+| Ping | ✅ 完了 | ICMP/TCP ping、統計表示 |
+| Traceroute | ✅ 完了 | UDP/TCP/ICMPモード |
+| DNS解決 | ✅ 完了 | A/AAAA/MX/TXT/NS/CNAME/SOA/PTR |
+| MTU探索 | ✅ 完了 | Path MTU Discovery |
+| 帯域幅測定 | ✅ 完了 | Upload/Download/Both |
+| レイテンシ測定 | ✅ 完了 | ヒストグラム、異常値検出 |
 
 ### 設計との差異
 
@@ -900,16 +961,16 @@ Hint: Verify the target is running and accessible.
 
 1. **SSL/TLS検査**: 独立サブコマンド（`scan ssl`）ではなく、`scan port --ssl-check` オプションとして統合
 2. **サービス検出**: 独立サブコマンド（`scan service`）ではなく、`scan port --service-detection --grab-banner` として統合
-3. **脆弱性チェック・グレード評価**: Phase 4に延期
-4. **スキャン結果比較（diff）**: Phase 4に延期
+3. **脆弱性チェック・グレード評価**: Phase 5に延期
+4. **スキャン結果比較（diff）**: Phase 5に延期
 
-### 未実装（Phase 4-5）
+### 未実装（Phase 5）
 
-- ネットワーク診断（ping/traceroute/DNS/MTU）
-- 帯域幅・レイテンシ測定
 - プロファイル管理
 - レポート機能（HTML/CSV/Markdown）
 - 設定ファイル対応
+- SSL/TLS脆弱性チェック・グレード評価
+- スキャン結果比較（diff）
 
 ---
 

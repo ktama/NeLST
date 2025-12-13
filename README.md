@@ -12,7 +12,9 @@
 - 🔍 **セキュリティスキャン**: ポートスキャン（TCP Connect, SYN, FIN, Xmas, NULL, UDP）
 - 🔐 **SSL/TLS検査**: 証明書情報取得、有効期限チェック、暗号スイート検査
 - 🏷️ **サービス検出**: バナー取得、サービス識別、バージョン検出
-- 🖥️ **テストサーバ**: エコーサーバ、シンクサーバ、フラッドサーバ、HTTPサーバ
+- � **ネットワーク診断**: Ping（ICMP/TCP）、Traceroute、DNS解決、MTU探索
+- 📈 **帯域幅測定**: 帯域幅測定、レイテンシ測定、ヒストグラム表示
+- �🖥️ **テストサーバ**: エコーサーバ、シンクサーバ、フラッドサーバ、HTTPサーバ
 - 📊 **詳細な統計**: レイテンシ（P50/P95/P99）、スループット、成功率
 - 📁 **複数の出力形式**: テキスト、JSON、ファイル出力
 
@@ -41,8 +43,10 @@ cargo build --release
 nelst <COMMAND> [OPTIONS]
 
 COMMANDS:
-    load        負荷テスト（トラフィック/コネクション）
+    load        負荷テスト（トラフィック/コネクション/HTTP）
     scan        セキュリティスキャン（ポートスキャン）
+    diag        ネットワーク診断（ping/traceroute/DNS/MTU）
+    bench       帯域幅・レイテンシ測定
     server      テスト用サーバを起動
     help        ヘルプ表示
 
@@ -168,6 +172,97 @@ nelst server http -b 0.0.0.0:8080
 
 # HTTPサーバ with 遅延シミュレーション（50ms）とエラー率（10%）
 nelst server http -b 0.0.0.0:8080 --delay 50 --error-rate 0.1
+```
+
+### ネットワーク診断
+
+#### Ping
+
+```bash
+# 通常のICMP ping
+sudo nelst diag ping -t google.com -c 5
+
+# TCP ping（ファイアウォール越しなど）
+nelst diag ping -t google.com --tcp --port 443
+
+# パケットサイズ指定
+sudo nelst diag ping -t 192.168.1.1 -c 10 -s 1024
+```
+
+#### Traceroute
+
+```bash
+# 経路追跡（デフォルトはUDP）
+nelst diag trace -t google.com
+
+# TCPモードで特定ポートへ
+nelst diag trace -t google.com --tcp --port 443
+
+# ICMPモードで最大15ホップ
+sudo nelst diag trace -t google.com --icmp --max-hops 15
+```
+
+#### DNS解決
+
+```bash
+# Aレコード検索
+nelst diag dns -t google.com
+
+# MXレコード検索
+nelst diag dns -t google.com --record-type mx
+
+# すべてのレコードタイプを検索
+nelst diag dns -t google.com --record-type all
+
+# 特定のDNSサーバを使用
+nelst diag dns -t google.com -s 8.8.8.8
+
+# TCPで問い合わせ
+nelst diag dns -t google.com --tcp
+```
+
+#### MTU探索
+
+```bash
+# Path MTU探索
+sudo nelst diag mtu -t google.com
+
+# 探索範囲を指定
+sudo nelst diag mtu -t 192.168.1.1 --min-mtu 576 --max-mtu 9000
+```
+
+### 帯域幅・レイテンシ測定
+
+#### 帯域幅測定
+
+```bash
+# サーバモードで起動
+nelst bench bandwidth --server -b 0.0.0.0:5201
+
+# クライアントとして測定（10秒間）
+nelst bench bandwidth -t 192.168.1.100:5201 -d 10
+
+# アップロード/ダウンロード両方を測定
+nelst bench bandwidth -t 192.168.1.100:5201 --direction both
+
+# 並列ストリーム数を指定
+nelst bench bandwidth -t 192.168.1.100:5201 -p 4
+```
+
+#### レイテンシ測定
+
+```bash
+# サーバモードで起動
+nelst bench latency --server -b 0.0.0.0:5201
+
+# レイテンシ測定（100回）
+nelst bench latency -t 192.168.1.100:5201 -c 100
+
+# 継続時間指定で測定
+nelst bench latency -t 192.168.1.100:5201 -d 60
+
+# 詳細統計を出力
+nelst bench latency -t 192.168.1.100:5201 -c 1000 --json
 ```
 
 ## 設定ファイル

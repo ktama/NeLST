@@ -21,8 +21,10 @@
 //! nelst server echo -b 0.0.0.0:8080
 //! ```
 
+mod bench;
 mod cli;
 mod common;
+mod diag;
 mod load;
 mod scan;
 mod server;
@@ -105,6 +107,8 @@ fn run_command(cli: &Cli, output: &Output) -> Result<(), NelstError> {
         Commands::Load { command } => run_load_command(command, output),
         Commands::Scan { command } => run_scan_command(command, output),
         Commands::Server { command } => run_server_command(command, output),
+        Commands::Diag { command } => run_diag_command(command, output),
+        Commands::Bench { command } => run_bench_command(command, output),
     }
 }
 
@@ -403,6 +407,263 @@ fn run_server_command(
 
             info!("Starting HTTP server on {}", args.bind);
             rt.block_on(server::http::run(args))?;
+            Ok(())
+        }
+    }
+}
+
+/// 診断コマンドを実行
+fn run_diag_command(command: &cli::diag::DiagCommands, output: &Output) -> Result<(), NelstError> {
+    use cli::diag::DiagCommands;
+
+    let rt = tokio::runtime::Runtime::new()?;
+
+    match command {
+        DiagCommands::Ping(args) => {
+            let mode = if args.tcp { "TCP" } else { "ICMP" };
+            output.header("Ping Test");
+            output.info("Target", &args.target);
+            output.info("Mode", mode);
+            output.info("Count", &args.count.to_string());
+            output.info("Interval", &format!("{}ms", args.interval));
+            output.info("Timeout", &format!("{}ms", args.timeout));
+            output.newline();
+
+            let result = rt.block_on(diag::ping::run(args))?;
+
+            output.section("RESULTS");
+            output.info("Transmitted", &result.transmitted.to_string());
+            output.info("Received", &result.received.to_string());
+            output.info("Packet Loss", &format!("{:.1}%", result.packet_loss));
+            output.newline();
+
+            if result.received > 0 {
+                output.info("Min RTT", &format!("{:.3} ms", result.min_rtt));
+                output.info("Avg RTT", &format!("{:.3} ms", result.avg_rtt));
+                output.info("Max RTT", &format!("{:.3} ms", result.max_rtt));
+                output.info("Stddev", &format!("{:.3} ms", result.stddev_rtt));
+            }
+
+            output.json(&result)?;
+
+            if let Some(ref path) = args.output {
+                save_result_to_file(&result, path)?;
+            }
+            Ok(())
+        }
+        DiagCommands::Trace(args) => {
+            output.header("Traceroute");
+            output.info("Target", &args.target);
+            output.info("Mode", &format!("{:?}", args.mode));
+            output.info("Max Hops", &args.max_hops.to_string());
+            output.newline();
+
+            let result = rt.block_on(diag::trace::run(args))?;
+
+            output.section("ROUTE");
+            for hop in &result.hops {
+                let addr = hop.address.as_deref().unwrap_or("*");
+                let rtts: Vec<String> = hop
+                    .rtts
+                    .iter()
+                    .map(|r| match r {
+                        Some(rtt) => format!("{:.2}ms", rtt),
+                        None => "*".to_string(),
+                    })
+                    .collect();
+                output.info(
+                    &format!("{:>2}", hop.ttl),
+                    &format!("{:<20} {}", addr, rtts.join("  ")),
+                );
+            }
+
+            output.newline();
+            if result.reached_destination {
+                output.success(&format!(
+                    "Reached destination in {} hops",
+                    result.total_hops
+                ));
+            } else {
+                output.warning("Did not reach destination");
+            }
+
+            output.json(&result)?;
+
+            if let Some(ref path) = args.output {
+                save_result_to_file(&result, path)?;
+            }
+            Ok(())
+        }
+        DiagCommands::Dns(args) => {
+            output.header("DNS Lookup");
+            output.info("Query", &args.target);
+            output.info("Type", &format!("{:?}", args.record_type));
+            if let Some(server) = args.server {
+                output.info("Server", &server.to_string());
+            }
+            output.info("Protocol", if args.tcp { "TCP" } else { "UDP" });
+            output.newline();
+
+            let result = rt.block_on(diag::dns::run(args))?;
+
+            output.section("RECORDS");
+            if result.records.is_empty() {
+                output.warning("No records found");
+                if let Some(ref err) = result.error {
+                    output.error(err);
+                }
+            } else {
+                for record in &result.records {
+                    output.info(
+                        &record.record_type,
+                        &format!("{} (TTL: {})", record.value, record.ttl),
+                    );
+                }
+            }
+            output.newline();
+            output.info("Query Time", &format!("{:.2} ms", result.resolve_time_ms));
+
+            output.json(&result)?;
+
+            if let Some(ref path) = args.output {
+                save_result_to_file(&result, path)?;
+            }
+            Ok(())
+        }
+        DiagCommands::Mtu(args) => {
+            output.header("MTU Discovery");
+            output.info("Target", &args.target);
+            output.info(
+                "Range",
+                &format!("{} - {} bytes", args.min_mtu, args.max_mtu),
+            );
+            output.newline();
+
+            let result = rt.block_on(diag::mtu::run(args))?;
+
+            output.section("RESULT");
+            output.info("Path MTU", &format!("{} bytes", result.path_mtu));
+            output.info(
+                "Discovery Time",
+                &format!("{:.2} ms", result.discovery_time_ms),
+            );
+
+            output.json(&result)?;
+
+            if let Some(ref path) = args.output {
+                save_result_to_file(&result, path)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+/// ベンチマークコマンドを実行
+fn run_bench_command(
+    command: &cli::bench::BenchCommands,
+    output: &Output,
+) -> Result<(), NelstError> {
+    use cli::bench::BenchCommands;
+
+    let rt = tokio::runtime::Runtime::new()?;
+
+    match command {
+        BenchCommands::Bandwidth(args) => {
+            if args.server {
+                output.header("Bandwidth Server");
+                output.info("Bind", &args.bind.to_string());
+                output.newline();
+                output.message("Press Ctrl+C to stop the server.");
+                output.newline();
+
+                rt.block_on(bench::bandwidth::run(args))?;
+            } else {
+                output.header("Bandwidth Test");
+                if let Some(target) = args.target {
+                    output.info("Target", &target.to_string());
+                }
+                output.info("Duration", &format!("{}s", args.duration));
+                output.info("Direction", &format!("{:?}", args.direction));
+                output.info("Parallel", &args.parallel.to_string());
+                output.newline();
+
+                let result = rt.block_on(bench::bandwidth::run(args))?;
+
+                output.section("RESULTS");
+                if let Some(ref upload) = result.upload {
+                    output.info(
+                        "Upload",
+                        &format!(
+                            "{:.2} Mbps (peak: {:.2} Mbps)",
+                            upload.bandwidth_mbps, upload.peak_mbps
+                        ),
+                    );
+                }
+                if let Some(ref download) = result.download {
+                    output.info(
+                        "Download",
+                        &format!(
+                            "{:.2} Mbps (peak: {:.2} Mbps)",
+                            download.bandwidth_mbps, download.peak_mbps
+                        ),
+                    );
+                }
+
+                output.json(&result)?;
+
+                if let Some(ref path) = args.output {
+                    save_result_to_file(&result, path)?;
+                }
+            }
+            Ok(())
+        }
+        BenchCommands::Latency(args) => {
+            output.header("Latency Measurement");
+            output.info("Target", &args.target.to_string());
+            output.info("Duration", &format!("{}s", args.duration));
+            output.info("Interval", &format!("{}ms", args.interval));
+            output.newline();
+
+            let result = rt.block_on(bench::latency::run(args))?;
+
+            output.section("RESULTS");
+            output.info(
+                "Measurements",
+                &format!("{} ({} successful)", result.count, result.success_count),
+            );
+            output.info("Success Rate", &format!("{:.1}%", result.success_rate));
+            output.newline();
+
+            output.info("Min", &format!("{:.2} ms", result.min_ms));
+            output.info("Avg", &format!("{:.2} ms", result.avg_ms));
+            output.info("Max", &format!("{:.2} ms", result.max_ms));
+            output.info("Stddev", &format!("{:.2} ms", result.stddev_ms));
+            output.newline();
+
+            output.info("P50", &format!("{:.2} ms", result.p50_ms));
+            output.info("P95", &format!("{:.2} ms", result.p95_ms));
+            output.info("P99", &format!("{:.2} ms", result.p99_ms));
+
+            if args.histogram {
+                if let Some(ref histogram) = result.histogram {
+                    output.newline();
+                    output.section("HISTOGRAM");
+                    for line in bench::latency::format_histogram(histogram, 30) {
+                        output.message(&line);
+                    }
+                }
+            }
+
+            if !result.outliers.is_empty() {
+                output.newline();
+                output.warning(&format!("Detected {} outliers", result.outliers.len()));
+            }
+
+            output.json(&result)?;
+
+            if let Some(ref path) = args.output {
+                save_result_to_file(&result, path)?;
+            }
             Ok(())
         }
     }

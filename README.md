@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org/)
-[![CI](https://github.com/your-username/NeLST/workflows/CI/badge.svg)](https://github.com/your-username/NeLST/actions)
+[![CI](https://github.com/ktama/NeLST/workflows/CI/badge.svg)](https://github.com/ktama/NeLST/actions)
 
 ネットワークの負荷テストとセキュリティテストを行うCLIツール。
 

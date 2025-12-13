@@ -11,8 +11,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
-use tokio_rustls::client::TlsStream;
 use tokio_rustls::TlsConnector;
+use tokio_rustls::client::TlsStream;
 use tracing::{debug, warn};
 use x509_parser::prelude::*;
 
@@ -45,11 +45,7 @@ pub struct CertificateInfo {
 }
 
 /// SSL/TLS検査を実行
-pub async fn inspect_ssl(
-    addr: SocketAddr,
-    hostname: &str,
-    timeout_ms: u64,
-) -> Result<SslInfo> {
+pub async fn inspect_ssl(addr: SocketAddr, hostname: &str, timeout_ms: u64) -> Result<SslInfo> {
     let port = addr.port();
     let timeout_duration = Duration::from_millis(timeout_ms);
 
@@ -88,7 +84,7 @@ pub async fn inspect_ssl(
 /// TLS接続を確立して情報を取得
 async fn connect_tls(addr: SocketAddr, hostname: &str) -> Result<SslInfo> {
     let port = addr.port();
-    
+
     // Root証明書ストアを作成
     let mut root_store = RootCertStore::empty();
     root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
@@ -101,14 +97,13 @@ async fn connect_tls(addr: SocketAddr, hostname: &str) -> Result<SslInfo> {
     let connector = TlsConnector::from(Arc::new(config));
 
     // TCP接続
-    let stream = TcpStream::connect(addr).await.map_err(|e| {
-        NelstError::scan(format!("TCP connection failed: {}", e))
-    })?;
+    let stream = TcpStream::connect(addr)
+        .await
+        .map_err(|e| NelstError::scan(format!("TCP connection failed: {}", e)))?;
 
     // サーバー名を作成
-    let server_name = ServerName::try_from(hostname.to_string()).map_err(|_| {
-        NelstError::scan("Invalid hostname")
-    })?;
+    let server_name = ServerName::try_from(hostname.to_string())
+        .map_err(|_| NelstError::scan("Invalid hostname"))?;
 
     // TLSハンドシェイク
     let tls_stream: TlsStream<TcpStream> = match connector.connect(server_name, stream).await {
@@ -132,7 +127,9 @@ async fn connect_tls(addr: SocketAddr, hostname: &str) -> Result<SslInfo> {
     let (_, conn) = tls_stream.get_ref();
 
     let tls_version = conn.protocol_version().map(|v| format!("{:?}", v));
-    let cipher_suite = conn.negotiated_cipher_suite().map(|c| format!("{:?}", c.suite()));
+    let cipher_suite = conn
+        .negotiated_cipher_suite()
+        .map(|c| format!("{:?}", c.suite()));
 
     // ピア証明書を取得
     let peer_certs = conn.peer_certificates();
@@ -161,9 +158,8 @@ async fn connect_tls(addr: SocketAddr, hostname: &str) -> Result<SslInfo> {
 
 /// DER形式の証明書をパース
 fn parse_certificate(der: &[u8]) -> Result<CertificateInfo> {
-    let (_, cert) = X509Certificate::from_der(der).map_err(|e| {
-        NelstError::scan(format!("Failed to parse certificate: {:?}", e))
-    })?;
+    let (_, cert) = X509Certificate::from_der(der)
+        .map_err(|e| NelstError::scan(format!("Failed to parse certificate: {:?}", e)))?;
 
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -208,8 +204,16 @@ fn parse_certificate(der: &[u8]) -> Result<CertificateInfo> {
         subject: cert.subject().to_string(),
         issuer: cert.issuer().to_string(),
         serial_number: cert.serial.to_string(),
-        not_before: cert.validity().not_before.to_rfc2822().unwrap_or_else(|_| "Unknown".to_string()),
-        not_after: cert.validity().not_after.to_rfc2822().unwrap_or_else(|_| "Unknown".to_string()),
+        not_before: cert
+            .validity()
+            .not_before
+            .to_rfc2822()
+            .unwrap_or_else(|_| "Unknown".to_string()),
+        not_after: cert
+            .validity()
+            .not_after
+            .to_rfc2822()
+            .unwrap_or_else(|_| "Unknown".to_string()),
         is_expired,
         days_until_expiry,
         san,
@@ -283,12 +287,21 @@ pub fn format_ssl_info(info: &SslInfo) -> String {
         output.push_str(&format!("  Not Before: {}\n", cert.not_before));
         output.push_str(&format!("  Not After: {}\n", cert.not_after));
         output.push_str(&format!("  Expired: {}\n", cert.is_expired));
-        output.push_str(&format!("  Days Until Expiry: {}\n", cert.days_until_expiry));
+        output.push_str(&format!(
+            "  Days Until Expiry: {}\n",
+            cert.days_until_expiry
+        ));
         if !cert.san.is_empty() {
             output.push_str(&format!("  SAN: {}\n", cert.san.join(", ")));
         }
-        output.push_str(&format!("  Signature Algorithm: {}\n", cert.signature_algorithm));
-        output.push_str(&format!("  Public Key Algorithm: {}\n", cert.public_key_algorithm));
+        output.push_str(&format!(
+            "  Signature Algorithm: {}\n",
+            cert.signature_algorithm
+        ));
+        output.push_str(&format!(
+            "  Public Key Algorithm: {}\n",
+            cert.public_key_algorithm
+        ));
         if let Some(bits) = cert.public_key_bits {
             output.push_str(&format!("  Public Key Bits: {}\n", bits));
         }
@@ -312,7 +325,7 @@ mod tests {
     async fn test_inspect_ssl_invalid_port() {
         // CryptoProviderを設定
         let _ = rustls::crypto::ring::default_provider().install_default();
-        
+
         // 未使用ポートへのSSL検査
         let addr = SocketAddr::new("127.0.0.1".parse().unwrap(), 59999);
         let result = inspect_ssl(addr, "localhost", 1000).await;
@@ -420,10 +433,7 @@ mod tests {
             certificate: None,
             chain_length: 0,
             is_valid: false,
-            errors: vec![
-                "Connection refused".to_string(),
-                "Timeout".to_string(),
-            ],
+            errors: vec!["Connection refused".to_string(), "Timeout".to_string()],
         };
         let output = format_ssl_info(&info);
         assert!(output.contains("Port: 8443"));

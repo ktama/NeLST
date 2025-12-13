@@ -58,6 +58,7 @@ impl Profile {
     }
 
     /// オプションを設定
+    #[allow(dead_code)]
     pub fn set_option<T: Serialize>(&mut self, key: &str, value: T) -> Result<()> {
         let json_value = serde_json::to_value(value)
             .map_err(|e| NelstError::config(format!("Failed to serialize option: {}", e)))?;
@@ -67,6 +68,7 @@ impl Profile {
     }
 
     /// オプションを取得
+    #[allow(dead_code)]
     pub fn get_option<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Option<T> {
         self.options
             .get(key)
@@ -74,12 +76,11 @@ impl Profile {
     }
 
     /// オプションを文字列として取得
+    #[allow(dead_code)]
     pub fn get_option_string(&self, key: &str) -> Option<String> {
-        self.options.get(key).map(|v| {
-            match v {
-                serde_json::Value::String(s) => s.clone(),
-                _ => v.to_string(),
-            }
+        self.options.get(key).map(|v| match v {
+            serde_json::Value::String(s) => s.clone(),
+            _ => v.to_string(),
         })
     }
 }
@@ -94,9 +95,8 @@ pub struct ProfileManager {
 impl ProfileManager {
     /// 新しいプロファイルマネージャーを作成
     pub fn new() -> Result<Self> {
-        let profiles_dir = Config::profiles_dir().ok_or_else(|| {
-            NelstError::config("Could not determine home directory")
-        })?;
+        let profiles_dir = Config::profiles_dir()
+            .ok_or_else(|| NelstError::config("Could not determine home directory"))?;
 
         // プロファイルディレクトリを作成
         if !profiles_dir.exists() {
@@ -112,6 +112,7 @@ impl ProfileManager {
     }
 
     /// カスタムディレクトリでプロファイルマネージャーを作成
+    #[allow(dead_code)]
     pub fn with_dir(profiles_dir: PathBuf) -> Result<Self> {
         if !profiles_dir.exists() {
             fs::create_dir_all(&profiles_dir).map_err(|e| {
@@ -147,15 +148,11 @@ impl ProfileManager {
     pub fn load(&self, name: &str) -> Result<Profile> {
         let path = self.profile_path(name);
         if !path.exists() {
-            return Err(NelstError::config(format!(
-                "Profile '{}' not found",
-                name
-            )));
+            return Err(NelstError::config(format!("Profile '{}' not found", name)));
         }
 
-        let content = fs::read_to_string(&path).map_err(|e| {
-            NelstError::config(format!("Failed to read profile {:?}: {}", path, e))
-        })?;
+        let content = fs::read_to_string(&path)
+            .map_err(|e| NelstError::config(format!("Failed to read profile {:?}: {}", path, e)))?;
 
         toml::from_str(&content)
             .map_err(|e| NelstError::config(format!("Failed to parse profile: {}", e)))
@@ -178,7 +175,7 @@ impl ProfileManager {
             })?;
 
             let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "toml") {
+            if path.extension().is_some_and(|ext| ext == "toml") {
                 if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
                     match self.load(name) {
                         Ok(profile) => {
@@ -208,10 +205,7 @@ impl ProfileManager {
     pub fn delete(&self, name: &str) -> Result<()> {
         let path = self.profile_path(name);
         if !path.exists() {
-            return Err(NelstError::config(format!(
-                "Profile '{}' not found",
-                name
-            )));
+            return Err(NelstError::config(format!("Profile '{}' not found", name)));
         }
 
         fs::remove_file(&path).map_err(|e| {
@@ -241,9 +235,8 @@ impl ProfileManager {
 
     /// ファイルからプロファイルをインポート
     pub fn import(&self, input_path: &str, new_name: Option<&str>) -> Result<Profile> {
-        let content = fs::read_to_string(input_path).map_err(|e| {
-            NelstError::config(format!("Failed to read {}: {}", input_path, e))
-        })?;
+        let content = fs::read_to_string(input_path)
+            .map_err(|e| NelstError::config(format!("Failed to read {}: {}", input_path, e)))?;
 
         let mut profile: Profile = toml::from_str(&content)
             .map_err(|e| NelstError::config(format!("Failed to parse profile: {}", e)))?;
@@ -311,7 +304,7 @@ mod tests {
     #[test]
     fn test_profile_options() {
         let mut profile = Profile::new("test", "load", "traffic", None);
-        
+
         profile.set_option("target", "127.0.0.1:8080").unwrap();
         profile.set_option("duration", 60u64).unwrap();
         profile.set_option("concurrency", 10usize).unwrap();
@@ -395,7 +388,9 @@ mod tests {
         manager.save(&profile).unwrap();
 
         // エクスポート
-        manager.export("original", export_path.to_str().unwrap()).unwrap();
+        manager
+            .export("original", export_path.to_str().unwrap())
+            .unwrap();
         assert!(export_path.exists());
 
         // 別名でインポート

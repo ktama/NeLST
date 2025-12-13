@@ -135,13 +135,13 @@ async fn measure_once(
             if let Err(e) = stream.write_all(ping_data).await {
                 debug!("Write failed: {}", e);
             }
-            
+
             let mut buf = [0u8; 4];
             // 応答を試みるが、エコーサーバでなくても接続レイテンシは取得
             let _ = timeout(Duration::from_millis(100), stream.read(&mut buf)).await;
-            
+
             let _ = stream.shutdown().await;
-            
+
             let rtt = start.elapsed().as_secs_f64() * 1000.0;
             Ok(rtt)
         }
@@ -169,7 +169,7 @@ pub async fn run(args: &LatencyArgs) -> Result<LatencyResult, NelstError> {
 
     while start.elapsed() < duration {
         count += 1;
-        
+
         match measure_once(&target, timeout_duration).await {
             Ok(rtt) => {
                 debug!("Measurement {}: {:.2}ms", count, rtt);
@@ -197,8 +197,8 @@ pub async fn run(args: &LatencyArgs) -> Result<LatencyResult, NelstError> {
         let max = latencies.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
         let sum: f64 = latencies.iter().sum();
         let avg = sum / latencies.len() as f64;
-        let variance: f64 = latencies.iter().map(|l| (l - avg).powi(2)).sum::<f64>()
-            / latencies.len() as f64;
+        let variance: f64 =
+            latencies.iter().map(|l| (l - avg).powi(2)).sum::<f64>() / latencies.len() as f64;
         let stddev = variance.sqrt();
 
         let mut sorted = latencies.clone();

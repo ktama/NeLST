@@ -335,7 +335,8 @@ mod tests {
         assert!(version.is_some());
 
         // HTTPレスポンス
-        let (name, _, server) = identify_service(80, Some("HTTP/1.1 200 OK\r\nServer: nginx/1.18.0"));
+        let (name, _, server) =
+            identify_service(80, Some("HTTP/1.1 200 OK\r\nServer: nginx/1.18.0"));
         assert_eq!(name, Some("http".to_string()));
         assert_eq!(server, Some("nginx/1.18.0".to_string()));
 

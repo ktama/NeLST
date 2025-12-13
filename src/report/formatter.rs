@@ -1,9 +1,7 @@
 //! レポートフォーマッター
 //!
-//! JSON, CSV, HTML, Markdown形式でのレポート出力を行う。
-
+//! JSON, CSV, HTML, Markdown形式でのレポート出力を行う。n
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs;
 
 use crate::common::error::{NelstError, Result};
@@ -40,6 +38,7 @@ impl ReportFormat {
     }
 
     /// ファイル拡張子を取得
+    #[allow(dead_code)]
     pub fn extension(&self) -> &'static str {
         match self {
             ReportFormat::Json => "json",
@@ -53,6 +52,7 @@ impl ReportFormat {
 
 /// レポートジェネレーター
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct ReportGenerator {
     /// レポートタイトル
     title: String,
@@ -62,6 +62,7 @@ pub struct ReportGenerator {
     generated_at: String,
 }
 
+#[allow(dead_code)]
 impl ReportGenerator {
     /// 新しいレポートジェネレーターを作成
     pub fn new(title: &str) -> Self {
@@ -366,6 +367,7 @@ impl ReportGenerator {
 
 /// レポートセクション
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct ReportSection {
     /// セクションタイトル
     pub title: String,
@@ -373,6 +375,7 @@ pub struct ReportSection {
     pub content: SectionContent,
 }
 
+#[allow(dead_code)]
 impl ReportSection {
     /// キーバリュー形式のセクションを作成
     pub fn key_value(title: &str, items: Vec<(&str, &str)>) -> Self {
@@ -409,6 +412,7 @@ impl ReportSection {
 
 /// セクション内容
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub enum SectionContent {
     /// キーバリュー形式
     KeyValue(Vec<(String, String)>),
@@ -422,6 +426,7 @@ pub enum SectionContent {
 }
 
 /// HTMLエスケープ
+#[allow(dead_code)]
 fn escape_html(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -431,6 +436,7 @@ fn escape_html(s: &str) -> String {
 }
 
 /// CSSスタイル
+#[allow(dead_code)]
 const CSS_STYLES: &str = r#"
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;

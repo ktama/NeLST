@@ -84,7 +84,11 @@ impl PingResult {
         let sum: f64 = self.rtts.iter().sum();
         self.avg_rtt = sum / self.rtts.len() as f64;
 
-        let variance: f64 = self.rtts.iter().map(|rtt| (rtt - self.avg_rtt).powi(2)).sum::<f64>()
+        let variance: f64 = self
+            .rtts
+            .iter()
+            .map(|rtt| (rtt - self.avg_rtt).powi(2))
+            .sum::<f64>()
             / self.rtts.len() as f64;
         self.stddev_rtt = variance.sqrt();
 
@@ -141,12 +145,19 @@ async fn icmp_ping(
 
     let payload = vec![0u8; size.saturating_sub(8)]; // ICMPヘッダ分を引く
     let mut results = Vec::with_capacity(count as usize);
-    let mut pinger = client.pinger(target_ip, PingIdentifier(rand::random())).await;
+    let mut pinger = client
+        .pinger(target_ip, PingIdentifier(rand::random()))
+        .await;
 
     for seq in 0..count {
         let _start = Instant::now();
-        
-        match timeout(timeout_duration, pinger.ping(PingSequence(seq as u16), &payload)).await {
+
+        match timeout(
+            timeout_duration,
+            pinger.ping(PingSequence(seq as u16), &payload),
+        )
+        .await
+        {
             Ok(Ok((IcmpPacket::V4(_), rtt))) | Ok(Ok((IcmpPacket::V6(_), rtt))) => {
                 let rtt_ms = rtt.as_secs_f64() * 1000.0;
                 debug!("Reply from {}: seq={} time={:.2}ms", target_ip, seq, rtt_ms);
@@ -218,11 +229,8 @@ async fn tcp_ping(
 pub async fn run(args: &PingArgs) -> Result<PingResult, NelstError> {
     let target_ip = resolve_host(&args.target)?;
     let mode = if args.tcp { "TCP" } else { "ICMP" };
-    
-    info!(
-        "PING {} ({}) {} mode",
-        args.target, target_ip, mode
-    );
+
+    info!("PING {} ({}) {} mode", args.target, target_ip, mode);
 
     let interval = Duration::from_millis(args.interval);
     let timeout_duration = Duration::from_millis(args.timeout);
@@ -242,10 +250,7 @@ pub async fn run(args: &PingArgs) -> Result<PingResult, NelstError> {
 
     result.calculate_stats();
 
-    info!(
-        "--- {} ping statistics ---",
-        args.target
-    );
+    info!("--- {} ping statistics ---", args.target);
     info!(
         "{} packets transmitted, {} received, {:.1}% packet loss",
         result.transmitted, result.received, result.packet_loss

@@ -141,7 +141,7 @@ async fn tcp_connect_with_ttl(target: &SocketAddr, ttl: u8) -> Result<bool, Nels
     socket.set_nonblocking(true).ok();
 
     let addr: socket2::SockAddr = (*target).into();
-    
+
     // 非同期で接続を試行
     match socket.connect(&addr) {
         Ok(()) => Ok(true),
@@ -185,7 +185,9 @@ async fn icmp_trace(
             is_destination: false,
         };
 
-        let mut pinger = client.pinger(target_ip, PingIdentifier(rand::random())).await;
+        let mut pinger = client
+            .pinger(target_ip, PingIdentifier(rand::random()))
+            .await;
         pinger.timeout(timeout_duration);
 
         for query in 0..queries {
@@ -260,8 +262,9 @@ async fn udp_trace(
                 Domain::IPV6
             };
 
-            let socket = Socket::new(domain, Type::DGRAM, Some(Protocol::UDP))
-                .map_err(|e| NelstError::connection(format!("Failed to create UDP socket: {}", e)))?;
+            let socket = Socket::new(domain, Type::DGRAM, Some(Protocol::UDP)).map_err(|e| {
+                NelstError::connection(format!("Failed to create UDP socket: {}", e))
+            })?;
 
             socket
                 .set_ttl(ttl as u32)
@@ -276,8 +279,9 @@ async fn udp_trace(
             socket.set_nonblocking(true).ok();
 
             let std_socket: std::net::UdpSocket = socket.into();
-            let udp_socket = UdpSocket::from_std(std_socket)
-                .map_err(|e| NelstError::connection(format!("Failed to create async socket: {}", e)))?;
+            let udp_socket = UdpSocket::from_std(std_socket).map_err(|e| {
+                NelstError::connection(format!("Failed to create async socket: {}", e))
+            })?;
 
             let start = Instant::now();
             let payload = b"NeLST traceroute probe";
@@ -331,13 +335,27 @@ pub async fn run(args: &TraceArgs) -> Result<TraceResult, NelstError> {
 
     let hops = match args.mode {
         TraceMode::Tcp => {
-            tcp_trace(target_ip, args.port, args.max_hops, args.queries, timeout_duration).await?
+            tcp_trace(
+                target_ip,
+                args.port,
+                args.max_hops,
+                args.queries,
+                timeout_duration,
+            )
+            .await?
         }
         TraceMode::Icmp => {
             icmp_trace(target_ip, args.max_hops, args.queries, timeout_duration).await?
         }
         TraceMode::Udp => {
-            udp_trace(target_ip, args.port, args.max_hops, args.queries, timeout_duration).await?
+            udp_trace(
+                target_ip,
+                args.port,
+                args.max_hops,
+                args.queries,
+                timeout_duration,
+            )
+            .await?
         }
     };
 
@@ -357,10 +375,7 @@ pub async fn run(args: &TraceArgs) -> Result<TraceResult, NelstError> {
     if reached {
         info!("Reached destination {} in {} hops", target_ip, total);
     } else {
-        warn!(
-            "Did not reach destination within {} hops",
-            args.max_hops
-        );
+        warn!("Did not reach destination within {} hops", args.max_hops);
     }
 
     Ok(result)
@@ -432,15 +447,13 @@ mod tests {
             resolved_ip: "10.0.0.1".to_string(),
             mode: "UDP".to_string(),
             max_hops: 30,
-            hops: vec![
-                Hop {
-                    ttl: 1,
-                    address: Some("192.168.1.1".to_string()),
-                    hostname: None,
-                    rtts: vec![Some(1.0)],
-                    is_destination: false,
-                },
-            ],
+            hops: vec![Hop {
+                ttl: 1,
+                address: Some("192.168.1.1".to_string()),
+                hostname: None,
+                rtts: vec![Some(1.0)],
+                is_destination: false,
+            }],
             reached_destination: false,
             total_hops: 30,
         };

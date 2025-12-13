@@ -118,16 +118,16 @@ fn probe_mtu(
         .map_err(|e| NelstError::connection(format!("Failed to set timeout: {}", e)))?;
 
     let target: SocketAddr = SocketAddr::new(target_ip, 0);
-    socket.connect(&target.into()).map_err(|e| {
-        NelstError::connection(format!("Failed to connect socket: {}", e))
-    })?;
+    socket
+        .connect(&target.into())
+        .map_err(|e| NelstError::connection(format!("Failed to connect socket: {}", e)))?;
 
     // ICMPペイロード（ヘッダを考慮してサイズを調整）
     // IPv4: 20 (IP) + 8 (ICMP) = 28 bytes overhead
     // IPv6: 40 (IP) + 8 (ICMP) = 48 bytes overhead
     let overhead = if target_ip.is_ipv4() { 28 } else { 48 };
     let payload_size = mtu_size.saturating_sub(overhead) as usize;
-    
+
     if payload_size == 0 {
         return Ok(None);
     }
@@ -265,11 +265,10 @@ async fn binary_search_mtu(
         // 非同期でprobeを実行（実際はsocket2はブロッキングなのでspawn_blocking使用）
         let target = target_ip;
         let probe_timeout = timeout;
-        let probe_result = tokio::task::spawn_blocking(move || {
-            probe_mtu(target, mid, probe_timeout)
-        })
-        .await
-        .map_err(|e| NelstError::connection(format!("Task failed: {}", e)))??;
+        let probe_result =
+            tokio::task::spawn_blocking(move || probe_mtu(target, mid, probe_timeout))
+                .await
+                .map_err(|e| NelstError::connection(format!("Task failed: {}", e)))??;
 
         match probe_result {
             Some(rtt) => {
@@ -306,7 +305,8 @@ pub async fn run(args: &MtuArgs) -> Result<MtuResult, NelstError> {
     );
 
     let start = Instant::now();
-    let (path_mtu, probes) = binary_search_mtu(target_ip, args.min_mtu, args.max_mtu, timeout).await?;
+    let (path_mtu, probes) =
+        binary_search_mtu(target_ip, args.min_mtu, args.max_mtu, timeout).await?;
     let discovery_time = start.elapsed().as_secs_f64() * 1000.0;
 
     let result = MtuResult {
@@ -377,15 +377,31 @@ mod tests {
             max_tested: 1500,
             discovery_time_ms: 250.0,
             probes: vec![
-                MtuProbe { mtu_size: 1500, success: false, rtt_ms: None },
-                MtuProbe { mtu_size: 576, success: true, rtt_ms: Some(5.0) },
-                MtuProbe { mtu_size: 1038, success: true, rtt_ms: Some(4.5) },
-                MtuProbe { mtu_size: 1400, success: true, rtt_ms: Some(4.8) },
+                MtuProbe {
+                    mtu_size: 1500,
+                    success: false,
+                    rtt_ms: None,
+                },
+                MtuProbe {
+                    mtu_size: 576,
+                    success: true,
+                    rtt_ms: Some(5.0),
+                },
+                MtuProbe {
+                    mtu_size: 1038,
+                    success: true,
+                    rtt_ms: Some(4.5),
+                },
+                MtuProbe {
+                    mtu_size: 1400,
+                    success: true,
+                    rtt_ms: Some(4.8),
+                },
             ],
         };
         assert_eq!(result.probes.len(), 4);
-        assert!(result.probes[0].success == false);
-        assert!(result.probes[1].success == true);
+        assert!(!result.probes[0].success);
+        assert!(result.probes[1].success);
     }
 
     #[test]

@@ -45,16 +45,17 @@ pub struct DirectionResult {
 
 /// 帯域幅サーバを実行
 async fn run_server(bind: SocketAddr) -> Result<BandwidthResult, NelstError> {
-    let listener = TcpListener::bind(bind).await.map_err(|e| {
-        NelstError::connection(format!("Failed to bind to {}: {}", bind, e))
-    })?;
+    let listener = TcpListener::bind(bind)
+        .await
+        .map_err(|e| NelstError::connection(format!("Failed to bind to {}: {}", bind, e)))?;
 
     info!("Bandwidth server listening on {}", bind);
 
     loop {
-        let (mut socket, peer) = listener.accept().await.map_err(|e| {
-            NelstError::connection(format!("Accept failed: {}", e))
-        })?;
+        let (mut socket, peer) = listener
+            .accept()
+            .await
+            .map_err(|e| NelstError::connection(format!("Accept failed: {}", e)))?;
 
         info!("Connection from {}", peer);
 
@@ -133,9 +134,10 @@ async fn run_upload_test(
     block_size: usize,
 ) -> Result<DirectionResult, NelstError> {
     // コマンド送信
-    stream.write_all(b"U").await.map_err(|e| {
-        NelstError::connection(format!("Failed to send command: {}", e))
-    })?;
+    stream
+        .write_all(b"U")
+        .await
+        .map_err(|e| NelstError::connection(format!("Failed to send command: {}", e)))?;
 
     let data = vec![0xCDu8; block_size];
     let start = Instant::now();
@@ -181,7 +183,10 @@ async fn run_upload_test(
     // ジッター計算（帯域幅の変動の標準偏差）
     let jitter_ms = if per_second_mbps.len() > 1 {
         let mean: f64 = per_second_mbps.iter().sum::<f64>() / per_second_mbps.len() as f64;
-        let variance: f64 = per_second_mbps.iter().map(|x| (x - mean).powi(2)).sum::<f64>()
+        let variance: f64 = per_second_mbps
+            .iter()
+            .map(|x| (x - mean).powi(2))
+            .sum::<f64>()
             / per_second_mbps.len() as f64;
         variance.sqrt()
     } else {
@@ -204,9 +209,10 @@ async fn run_download_test(
     block_size: usize,
 ) -> Result<DirectionResult, NelstError> {
     // コマンド送信
-    stream.write_all(b"D").await.map_err(|e| {
-        NelstError::connection(format!("Failed to send command: {}", e))
-    })?;
+    stream
+        .write_all(b"D")
+        .await
+        .map_err(|e| NelstError::connection(format!("Failed to send command: {}", e)))?;
 
     let mut buf = vec![0u8; block_size];
     let start = Instant::now();
@@ -250,7 +256,10 @@ async fn run_download_test(
 
     let jitter_ms = if per_second_mbps.len() > 1 {
         let mean: f64 = per_second_mbps.iter().sum::<f64>() / per_second_mbps.len() as f64;
-        let variance: f64 = per_second_mbps.iter().map(|x| (x - mean).powi(2)).sum::<f64>()
+        let variance: f64 = per_second_mbps
+            .iter()
+            .map(|x| (x - mean).powi(2))
+            .sum::<f64>()
             / per_second_mbps.len() as f64;
         variance.sqrt()
     } else {
@@ -279,7 +288,10 @@ async fn run_client(args: &BandwidthArgs) -> Result<BandwidthResult, NelstError>
     let mut download_result = None;
 
     // アップロードテスト
-    if matches!(args.direction, BandwidthDirection::Up | BandwidthDirection::Both) {
+    if matches!(
+        args.direction,
+        BandwidthDirection::Up | BandwidthDirection::Both
+    ) {
         info!("Starting upload test...");
         let mut stream = TcpStream::connect(target).await.map_err(|e| {
             NelstError::connection(format!("Failed to connect to {}: {}", target, e))
@@ -294,7 +306,10 @@ async fn run_client(args: &BandwidthArgs) -> Result<BandwidthResult, NelstError>
     }
 
     // ダウンロードテスト
-    if matches!(args.direction, BandwidthDirection::Down | BandwidthDirection::Both) {
+    if matches!(
+        args.direction,
+        BandwidthDirection::Down | BandwidthDirection::Both
+    ) {
         info!("Starting download test...");
         let mut stream = TcpStream::connect(target).await.map_err(|e| {
             NelstError::connection(format!("Failed to connect to {}: {}", target, e))
@@ -419,6 +434,9 @@ mod tests {
         };
         assert!(result.upload.is_some());
         assert!(result.download.is_some());
-        assert!(result.upload.as_ref().unwrap().bandwidth_mbps < result.download.as_ref().unwrap().bandwidth_mbps);
+        assert!(
+            result.upload.as_ref().unwrap().bandwidth_mbps
+                < result.download.as_ref().unwrap().bandwidth_mbps
+        );
     }
 }

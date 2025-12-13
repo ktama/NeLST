@@ -4,11 +4,11 @@
 
 use crate::cli::diag::{DnsArgs, DnsRecordType};
 use crate::common::error::NelstError;
+use hickory_resolver::Resolver;
 use hickory_resolver::config::{NameServerConfig, ResolverConfig};
 use hickory_resolver::name_server::TokioConnectionProvider;
 use hickory_resolver::proto::rr::RecordType;
 use hickory_resolver::proto::xfer::Protocol;
-use hickory_resolver::Resolver;
 use serde::Serialize;
 use std::net::{IpAddr, SocketAddr};
 use std::time::{Duration, Instant};
@@ -114,12 +114,17 @@ pub async fn run(args: &DnsArgs) -> Result<DnsResult, NelstError> {
 
     for rt in record_types {
         let start = Instant::now();
-        
+
         match lookup_records(&resolver, &args.target, rt).await {
             Ok(records) => {
                 let elapsed = start.elapsed().as_secs_f64() * 1000.0;
                 total_time += elapsed;
-                debug!("Found {} {:?} records in {:.2}ms", records.len(), rt, elapsed);
+                debug!(
+                    "Found {} {:?} records in {:.2}ms",
+                    records.len(),
+                    rt,
+                    elapsed
+                );
                 all_records.extend(records);
             }
             Err(e) => {
@@ -167,9 +172,10 @@ async fn lookup_records(
 
     match record_type {
         RecordType::A => {
-            let lookup = resolver.ipv4_lookup(name).await.map_err(|e| {
-                NelstError::connection(format!("A record lookup failed: {}", e))
-            })?;
+            let lookup = resolver
+                .ipv4_lookup(name)
+                .await
+                .map_err(|e| NelstError::connection(format!("A record lookup failed: {}", e)))?;
             for ip in lookup.iter() {
                 records.push(DnsRecord {
                     record_type: "A".to_string(),
@@ -179,9 +185,10 @@ async fn lookup_records(
             }
         }
         RecordType::AAAA => {
-            let lookup = resolver.ipv6_lookup(name).await.map_err(|e| {
-                NelstError::connection(format!("AAAA record lookup failed: {}", e))
-            })?;
+            let lookup = resolver
+                .ipv6_lookup(name)
+                .await
+                .map_err(|e| NelstError::connection(format!("AAAA record lookup failed: {}", e)))?;
             for ip in lookup.iter() {
                 records.push(DnsRecord {
                     record_type: "AAAA".to_string(),
@@ -191,9 +198,10 @@ async fn lookup_records(
             }
         }
         RecordType::MX => {
-            let lookup = resolver.mx_lookup(name).await.map_err(|e| {
-                NelstError::connection(format!("MX record lookup failed: {}", e))
-            })?;
+            let lookup = resolver
+                .mx_lookup(name)
+                .await
+                .map_err(|e| NelstError::connection(format!("MX record lookup failed: {}", e)))?;
             for mx in lookup.iter() {
                 records.push(DnsRecord {
                     record_type: "MX".to_string(),
@@ -203,11 +211,16 @@ async fn lookup_records(
             }
         }
         RecordType::TXT => {
-            let lookup = resolver.txt_lookup(name).await.map_err(|e| {
-                NelstError::connection(format!("TXT record lookup failed: {}", e))
-            })?;
+            let lookup = resolver
+                .txt_lookup(name)
+                .await
+                .map_err(|e| NelstError::connection(format!("TXT record lookup failed: {}", e)))?;
             for txt in lookup.iter() {
-                let txt_data: String = txt.iter().map(|d| String::from_utf8_lossy(d).to_string()).collect::<Vec<_>>().join("");
+                let txt_data: String = txt
+                    .iter()
+                    .map(|d| String::from_utf8_lossy(d).to_string())
+                    .collect::<Vec<_>>()
+                    .join("");
                 records.push(DnsRecord {
                     record_type: "TXT".to_string(),
                     value: txt_data,
@@ -216,9 +229,10 @@ async fn lookup_records(
             }
         }
         RecordType::NS => {
-            let lookup = resolver.ns_lookup(name).await.map_err(|e| {
-                NelstError::connection(format!("NS record lookup failed: {}", e))
-            })?;
+            let lookup = resolver
+                .ns_lookup(name)
+                .await
+                .map_err(|e| NelstError::connection(format!("NS record lookup failed: {}", e)))?;
             for ns in lookup.iter() {
                 records.push(DnsRecord {
                     record_type: "NS".to_string(),
@@ -228,9 +242,12 @@ async fn lookup_records(
             }
         }
         RecordType::CNAME => {
-            let lookup = resolver.lookup(name, RecordType::CNAME).await.map_err(|e| {
-                NelstError::connection(format!("CNAME record lookup failed: {}", e))
-            })?;
+            let lookup = resolver
+                .lookup(name, RecordType::CNAME)
+                .await
+                .map_err(|e| {
+                    NelstError::connection(format!("CNAME record lookup failed: {}", e))
+                })?;
             for record in lookup.record_iter() {
                 let rdata = record.data();
                 if let Some(cname) = rdata.as_cname() {
@@ -243,9 +260,10 @@ async fn lookup_records(
             }
         }
         RecordType::SOA => {
-            let lookup = resolver.soa_lookup(name).await.map_err(|e| {
-                NelstError::connection(format!("SOA record lookup failed: {}", e))
-            })?;
+            let lookup = resolver
+                .soa_lookup(name)
+                .await
+                .map_err(|e| NelstError::connection(format!("SOA record lookup failed: {}", e)))?;
             for soa in lookup.iter() {
                 records.push(DnsRecord {
                     record_type: "SOA".to_string(),
@@ -267,9 +285,10 @@ async fn lookup_records(
             let ip_addr: IpAddr = name.parse().map_err(|_| {
                 NelstError::config(format!("Invalid IP address for PTR lookup: {}", name))
             })?;
-            let lookup = resolver.reverse_lookup(ip_addr).await.map_err(|e| {
-                NelstError::connection(format!("PTR record lookup failed: {}", e))
-            })?;
+            let lookup = resolver
+                .reverse_lookup(ip_addr)
+                .await
+                .map_err(|e| NelstError::connection(format!("PTR record lookup failed: {}", e)))?;
             for ptr in lookup.iter() {
                 records.push(DnsRecord {
                     record_type: "PTR".to_string(),

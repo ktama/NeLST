@@ -171,9 +171,11 @@ fn receive_responses(
     let start = std::time::Instant::now();
     let timeout_duration = Duration::from_secs(5);
 
+    // パケット受信ループ
     while start.elapsed() < timeout_duration {
-        match iter.next_with_timeout(Duration::from_millis(100)) {
-            Ok(Some((packet, addr))) => {
+        // iter.next() は Result<(TcpPacket, IpAddr), Error> を返す
+        match iter.next() {
+            Ok((packet, addr)) => {
                 // ターゲットからの応答のみ処理
                 if let IpAddr::V4(src_ip) = addr {
                     if src_ip != target_ip {
@@ -197,8 +199,15 @@ fn receive_responses(
                     map.insert(port, state);
                 }
             }
-            Ok(None) => continue,
             Err(e) => {
+                // タイムアウトやその他のエラー
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut
+                {
+                    // タイムアウトの場合は少し待って続行
+                    std::thread::sleep(Duration::from_millis(10));
+                    continue;
+                }
                 debug!("Error receiving packet: {}", e);
                 break;
             }

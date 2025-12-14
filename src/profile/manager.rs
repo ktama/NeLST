@@ -175,22 +175,22 @@ impl ProfileManager {
             })?;
 
             let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "toml") {
-                if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
-                    match self.load(name) {
-                        Ok(profile) => {
-                            profiles.push(ProfileInfo {
-                                name: profile.name,
-                                description: profile.description,
-                                command_type: profile.command_type,
-                                subcommand_type: profile.subcommand_type,
-                                updated_at: profile.updated_at,
-                            });
-                        }
-                        Err(_) => {
-                            // 破損したプロファイルはスキップ
-                            continue;
-                        }
+            if path.extension().is_some_and(|ext| ext == "toml")
+                && let Some(name) = path.file_stem().and_then(|n| n.to_str())
+            {
+                match self.load(name) {
+                    Ok(profile) => {
+                        profiles.push(ProfileInfo {
+                            name: profile.name,
+                            description: profile.description,
+                            command_type: profile.command_type,
+                            subcommand_type: profile.subcommand_type,
+                            updated_at: profile.updated_at,
+                        });
+                    }
+                    Err(_) => {
+                        // 破損したプロファイルはスキップ
+                        continue;
                     }
                 }
             }

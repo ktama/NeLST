@@ -149,6 +149,11 @@ impl LatencyCollector {
         }
     }
 
+    /// 既存データをマージ
+    pub fn merge(&mut self, other: &mut LatencyCollector) {
+        self.samples.append(&mut other.samples);
+    }
+
     /// サンプルを追加（マイクロ秒）
     pub fn add(&mut self, latency_us: u64) {
         self.samples.push(latency_us);

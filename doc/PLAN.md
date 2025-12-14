@@ -452,7 +452,7 @@ hickory-resolver = "0.25"  # 旧trust-dns-resolver
 
 ### 5.5 テスト ✅
 
-- [x] ユニットテスト（各モジュール） - 205テスト
+- [x] ユニットテスト（各モジュール） - 221テスト
 - [ ] 統合テスト（CLIレベル）（延期: v0.6.0）
 - [ ] ベンチマークテスト（延期: v0.6.0）
 - [x] CI/CD設定（GitHub Actions）
@@ -462,7 +462,9 @@ hickory-resolver = "0.25"  # 旧trust-dns-resolver
 - [x] cli/mod.rs: 9テスト（+8）
 - [x] common/config.rs: 12テスト（+10）
 - [x] report/formatter.rs: 22テスト（+14）
-- [x] 全205テストがパス（Phase 4: 173 → Phase 5: 205）
+- [x] load/connection.rs: 6テスト（新規追加）
+- [x] load/traffic.rs: 10テスト（新規追加）
+- [x] 全221テストがパス（Phase 4: 173 → Phase 5: 221）
 
 ### 5.7 パッケージング ✅
 
@@ -470,6 +472,14 @@ hickory-resolver = "0.25"  # 旧trust-dns-resolver
 - [ ] crates.io公開準備（延期: v0.6.0）
 - [x] バイナリリリース（Linux/macOS/Windows）
 - [ ] Docker イメージ（延期: v0.6.0）
+
+### 5.8 パフォーマンス最適化 ✅
+
+- [x] 送信バッファの再利用（`traffic.rs`）- メモリアロケーション削減
+- [x] HTTP接続プールの最適化（`http.rs`）- TCP_NODELAY、Keep-Alive
+- [x] バッチ処理によるタスク生成（`connection.rs`）- CPU負荷分散
+- [x] LatencyCollectorにmerge機能追加（`stats.rs`）
+- [x] Clippy警告の修正（コード品質向上）
 
 ---
 

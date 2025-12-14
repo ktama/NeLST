@@ -991,13 +991,13 @@ fn run_bench_command(
             output.info("P95", &format!("{:.2} ms", result.p95_ms));
             output.info("P99", &format!("{:.2} ms", result.p99_ms));
 
-            if args.histogram {
-                if let Some(ref histogram) = result.histogram {
-                    output.newline();
-                    output.section("HISTOGRAM");
-                    for line in bench::latency::format_histogram(histogram, 30) {
-                        output.message(&line);
-                    }
+            if args.histogram
+                && let Some(ref histogram) = result.histogram
+            {
+                output.newline();
+                output.section("HISTOGRAM");
+                for line in bench::latency::format_histogram(histogram, 30) {
+                    output.message(&line);
                 }
             }
 

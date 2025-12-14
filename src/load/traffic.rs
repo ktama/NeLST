@@ -164,7 +164,29 @@ impl TrafficTest {
     }
 }
 
-/// TCPリクエストを実行
+/// 送信データを生成（Box::leak で静的バッファを作成し再利用）
+///
+/// # Arguments
+/// * `size` - 要求するデータサイズ（バイト）
+///
+/// # Returns
+/// 指定サイズ（最大64KB）の静的スライス参照
+fn get_send_data(size: usize) -> &'static [u8] {
+    use std::sync::OnceLock;
+    static BUFFER: OnceLock<Box<[u8]>> = OnceLock::new();
+
+    // サイズ0の場合は空スライスを返す
+    if size == 0 {
+        return &[];
+    }
+
+    // 最大64KBの固定バッファを一度だけ確保
+    let buf = BUFFER.get_or_init(|| vec![0x41u8; 65536].into_boxed_slice());
+
+    &buf[..size.min(buf.len())]
+}
+
+/// TCPリクエストを実行（最適化版）
 async fn run_tcp_request(
     target: std::net::SocketAddr,
     mode: &TrafficMode,
@@ -174,24 +196,27 @@ async fn run_tcp_request(
         NelstError::connection_with_source(format!("Failed to connect to {}", target), e)
     })?;
 
-    let data = vec![0x41u8; size];
     let mut sent = 0;
     let mut received = 0;
 
     match mode {
         TrafficMode::Send => {
-            stream.write_all(&data).await?;
-            sent = size;
+            // 静的バッファを再利用
+            let data = get_send_data(size);
+            stream.write_all(data).await?;
+            sent = data.len();
         }
         TrafficMode::Echo => {
-            stream.write_all(&data).await?;
-            sent = size;
-            let mut buf = vec![0u8; size];
+            let data = get_send_data(size);
+            stream.write_all(data).await?;
+            sent = data.len();
+            // 受信バッファは毎回必要だが、サイズを制限
+            let mut buf = vec![0u8; size.min(65536)];
             let n = stream.read(&mut buf).await?;
             received = n;
         }
         TrafficMode::Recv => {
-            let mut buf = vec![0u8; size];
+            let mut buf = vec![0u8; size.min(65536)];
             let n = stream.read(&mut buf).await?;
             received = n;
         }
@@ -201,6 +226,11 @@ async fn run_tcp_request(
 }
 
 /// UDPリクエストを実行
+///
+/// # Arguments
+/// * `target` - 接続先のソケットアドレス
+/// * `mode` - 送受信モード
+/// * `size` - 送信データサイズ
 async fn run_udp_request(
     target: std::net::SocketAddr,
     mode: &TrafficMode,
@@ -209,17 +239,18 @@ async fn run_udp_request(
     let socket = UdpSocket::bind("0.0.0.0:0").await?;
     socket.connect(target).await?;
 
-    let data = vec![0x41u8; size.min(65507)];
+    // 静的バッファを再利用（UDPの最大ペイロードサイズに制限）
+    let data = get_send_data(size.min(65507));
     let mut sent = 0;
     let mut received = 0;
 
     match mode {
         TrafficMode::Send => {
-            socket.send(&data).await?;
+            socket.send(data).await?;
             sent = data.len();
         }
         TrafficMode::Echo => {
-            socket.send(&data).await?;
+            socket.send(data).await?;
             sent = data.len();
             let mut buf = vec![0u8; 65535];
             // タイムアウト付きで受信
@@ -242,4 +273,116 @@ async fn run_udp_request(
     }
 
     Ok((sent, received))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::SocketAddr;
+
+    fn create_test_args(
+        target: SocketAddr,
+        protocol: Protocol,
+        mode: TrafficMode,
+        size: usize,
+    ) -> TrafficArgs {
+        TrafficArgs {
+            target,
+            protocol,
+            mode,
+            size,
+            duration: 1,
+            concurrency: 1,
+            rate: None,
+            output: None,
+        }
+    }
+
+    #[test]
+    fn test_get_send_data_zero_size() {
+        let data = get_send_data(0);
+        assert!(data.is_empty());
+    }
+
+    #[test]
+    fn test_get_send_data_normal_size() {
+        let data = get_send_data(100);
+        assert_eq!(data.len(), 100);
+        assert!(data.iter().all(|&b| b == 0x41));
+    }
+
+    #[test]
+    fn test_get_send_data_max_size() {
+        let data = get_send_data(65536);
+        assert_eq!(data.len(), 65536);
+    }
+
+    #[test]
+    fn test_get_send_data_over_max_size() {
+        let data = get_send_data(100000);
+        assert_eq!(data.len(), 65536); // 最大サイズにクランプ
+    }
+
+    #[test]
+    fn test_traffic_test_new() {
+        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+        let args = create_test_args(addr, Protocol::Tcp, TrafficMode::Send, 1024);
+        let test = TrafficTest::new(&args);
+
+        assert_eq!(test.target, addr);
+        assert_eq!(test.size, 1024);
+        assert_eq!(test.duration_secs, 1);
+        assert_eq!(test.concurrency, 1);
+        assert!(test.rate.is_none());
+    }
+
+    #[test]
+    fn test_traffic_mode_variants() {
+        let modes = vec![TrafficMode::Send, TrafficMode::Echo, TrafficMode::Recv];
+        assert_eq!(modes.len(), 3);
+    }
+
+    #[test]
+    fn test_protocol_variants() {
+        let protocols = vec![Protocol::Tcp, Protocol::Udp];
+        assert_eq!(protocols.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_run_tcp_request_unreachable() {
+        let addr: SocketAddr = "127.0.0.1:1".parse().unwrap();
+        let result = run_tcp_request(addr, &TrafficMode::Send, 100).await;
+        // 接続できないアドレスなのでエラー
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_run_udp_request_send_mode() {
+        // UDPは接続不要なので送信自体は成功する可能性がある
+        let addr: SocketAddr = "127.0.0.1:9999".parse().unwrap();
+        let result = run_udp_request(addr, &TrafficMode::Send, 100).await;
+        // 送信は成功するはず（UDPは非接続型）
+        assert!(result.is_ok());
+        let (sent, received) = result.unwrap();
+        assert_eq!(sent, 100);
+        assert_eq!(received, 0);
+    }
+
+    #[test]
+    fn test_traffic_args_with_rate() {
+        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+        let args = TrafficArgs {
+            target: addr,
+            protocol: Protocol::Tcp,
+            mode: TrafficMode::Send,
+            size: 1024,
+            duration: 10,
+            concurrency: 4,
+            rate: Some(1000),
+            output: None,
+        };
+        let test = TrafficTest::new(&args);
+        assert_eq!(test.rate, Some(1000));
+        assert_eq!(test.concurrency, 4);
+    }
 }

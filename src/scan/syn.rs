@@ -177,10 +177,10 @@ fn receive_responses(
         match iter.next() {
             Ok((packet, addr)) => {
                 // ターゲットからの応答のみ処理
-                if let IpAddr::V4(src_ip) = addr {
-                    if src_ip != target_ip {
-                        continue;
-                    }
+                if let IpAddr::V4(src_ip) = addr
+                    && src_ip != target_ip
+                {
+                    continue;
                 }
 
                 let response = TcpResponse::from_packet(&packet);

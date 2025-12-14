@@ -99,11 +99,18 @@ impl HttpTest {
         })
     }
 
-    /// クライアントを作成
+    /// クライアントを作成（接続プール最適化済み）
     fn build_client(&self) -> Result<Client> {
         let mut builder = Client::builder()
             .timeout(self.timeout)
-            .danger_accept_invalid_certs(self.insecure);
+            .danger_accept_invalid_certs(self.insecure)
+            // 接続プールの最適化
+            .pool_max_idle_per_host(self.concurrency.max(10))
+            .pool_idle_timeout(Duration::from_secs(30))
+            // TCP_NODELAY を有効にして遅延を削減
+            .tcp_nodelay(true)
+            // Keep-Alive を有効化
+            .tcp_keepalive(Duration::from_secs(60));
 
         if !self.follow_redirects {
             builder = builder.redirect(reqwest::redirect::Policy::none());

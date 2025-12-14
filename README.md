@@ -36,6 +36,37 @@ cargo build --release
 
 ビルドされたバイナリは `target/release/nelst` に配置されます。
 
+### コマンドとしてインストール
+
+システム全体で `nelst` コマンドを使用できるようにインストールします。
+
+```bash
+# リポジトリをクローン（初回のみ）
+git clone https://github.com/your-username/NeLST.git
+cd NeLST
+
+# システムにインストール（~/.cargo/bin/nelst に配置されます）
+cargo install --path .
+```
+
+`~/.cargo/bin` がPATHに含まれていることを確認してください。
+
+### アップデート
+
+最新版にアップデートするには、以下のコマンドを実行します。
+
+```bash
+cd NeLST
+git pull
+cargo install --path . --force
+```
+
+### アンインストール
+
+```bash
+cargo uninstall nelst
+```
+
 ### 必要要件
 
 - Rust 1.85以上（Edition 2024）

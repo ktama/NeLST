@@ -56,7 +56,41 @@ cargo build --release
 ./target/release/nelst --version
 ```
 
-### 2.2 ヘルプの確認
+### 2.2 コマンドとしてインストール
+
+システム全体で `nelst` コマンドを使用できるようにインストールします。
+
+```bash
+# システムにインストール（~/.cargo/bin/nelst に配置されます）
+cargo install --path .
+
+# インストール確認
+nelst --version
+```
+
+**💡 ヒント**: `~/.cargo/bin` がPATHに含まれていない場合は、以下を `~/.bashrc` または `~/.zshrc` に追加してください：
+
+```bash
+export PATH="$HOME/.cargo/bin:$PATH"
+```
+
+### 2.3 アップデート
+
+最新版にアップデートするには：
+
+```bash
+cd NeLST
+git pull
+cargo install --path . --force
+```
+
+### 2.4 アンインストール
+
+```bash
+cargo uninstall nelst
+```
+
+### 2.5 ヘルプの確認
 
 ```bash
 # 全体のヘルプ
@@ -67,7 +101,7 @@ nelst load --help
 nelst load traffic --help
 ```
 
-### 2.3 グローバルオプション
+### 2.6 グローバルオプション
 
 すべてのコマンドで使用可能なオプション：
 

@@ -1,8 +1,8 @@
 [package]
 name = "nelst"
-version = "0.1.0"
+version = "0.5.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.92"
 authors = ["NeLST Contributors"]
 description = "Network Load and Security Test - ネットワークの負荷テストとセキュリティテストを行うCLIツール"
 readme = "README.md"

@@ -160,11 +160,14 @@ mod tests {
 
     #[test]
     fn test_batch_size_constant() {
-        assert!(BATCH_SIZE > 0, "BATCH_SIZE should be positive");
-        assert!(
+        // 定数のアサーションはconstブロックでコンパイル時に検証
+        const _: () = assert!(BATCH_SIZE > 0, "BATCH_SIZE should be positive");
+        const _: () = assert!(
             BATCH_SIZE <= 1000,
             "BATCH_SIZE should not be too large to avoid memory issues"
         );
+        // テストが実行されることを確認
+        assert_eq!(BATCH_SIZE, 100);
     }
 
     #[tokio::test]

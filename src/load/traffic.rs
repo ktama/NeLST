@@ -338,13 +338,13 @@ mod tests {
 
     #[test]
     fn test_traffic_mode_variants() {
-        let modes = vec![TrafficMode::Send, TrafficMode::Echo, TrafficMode::Recv];
+        let modes = [TrafficMode::Send, TrafficMode::Echo, TrafficMode::Recv];
         assert_eq!(modes.len(), 3);
     }
 
     #[test]
     fn test_protocol_variants() {
-        let protocols = vec![Protocol::Tcp, Protocol::Udp];
+        let protocols = [Protocol::Tcp, Protocol::Udp];
         assert_eq!(protocols.len(), 2);
     }
 
